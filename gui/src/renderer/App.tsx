@@ -30,6 +30,15 @@ declare global {
       startMigration: (config: MigrationConfig) => Promise<MigrationResult>;
       cancelMigration: () => Promise<boolean>;
       validatePostgres: (config: PostgresConfig) => Promise<{ valid: boolean; message: string }>;
+      checkPostgresInstalled: () => Promise<{
+        installed: boolean;
+        running: boolean;
+        port: number;
+        message: string;
+        installUrl: string;
+        dockerCommand: string;
+      }>;
+      openExternalUrl: (url: string) => Promise<boolean>;
       onMigrationProgress: (callback: (update: ProgressUpdate) => void) => () => void;
       onTrayStartMigration: (callback: () => void) => () => void;
       onTrayOpenSettings: (callback: () => void) => () => void;
@@ -102,6 +111,24 @@ const App: React.FC = () => {
   }>({ checked: false, valid: false, message: 'Not checked' });
   const [isValidating, setIsValidating] = useState(false);
 
+  // System status
+  const [systemStatus, setSystemStatus] = useState<{
+    checked: boolean;
+    postgresInstalled: boolean;
+    postgresRunning: boolean;
+    message: string;
+    installUrl: string;
+    dockerCommand: string;
+  }>({
+    checked: false,
+    postgresInstalled: false,
+    postgresRunning: false,
+    message: 'Checking system...',
+    installUrl: '',
+    dockerCommand: ''
+  });
+  const [showSystemWarning, setShowSystemWarning] = useState(false);
+
   // Check if migration can start
   const canStartMigration = inputPath && outputPath && postgresStatus.valid && !isRunning;
   const getStartButtonMessage = (): string => {
@@ -132,6 +159,37 @@ const App: React.FC = () => {
       setIsValidating(false);
     }
   }, [postgresConfig]);
+
+  // Check system requirements on mount
+  useEffect(() => {
+    const checkSystem = async () => {
+      try {
+        const status = await window.electronAPI.checkPostgresInstalled();
+        setSystemStatus({
+          checked: true,
+          postgresInstalled: status.installed,
+          postgresRunning: status.running,
+          message: status.message,
+          installUrl: status.installUrl,
+          dockerCommand: status.dockerCommand
+        });
+
+        // Show warning if PostgreSQL is not running
+        if (!status.running) {
+          setShowSystemWarning(true);
+        }
+      } catch (err) {
+        console.error('Failed to check system:', err);
+        setSystemStatus(prev => ({
+          ...prev,
+          checked: true,
+          message: 'Could not check system status'
+        }));
+      }
+    };
+
+    checkSystem();
+  }, []);
 
   // Load settings on mount
   useEffect(() => {
@@ -396,6 +454,7 @@ const App: React.FC = () => {
         const versionInfo = getVersionInfo();
         return (
           <div className="main-view">
+            <div className="main-view-scroll">
             <div className="version-selector">
               <h4>Migration Path</h4>
               <div className="version-options">
@@ -423,6 +482,69 @@ const App: React.FC = () => {
                 </label>
               </div>
             </div>
+
+            {/* System Warning Banner */}
+            {showSystemWarning && !systemStatus.postgresRunning && (
+              <div className="system-warning">
+                <div className="warning-header">
+                  <span className="warning-icon">⚠️</span>
+                  <strong>PostgreSQL {systemStatus.postgresInstalled ? 'is not running' : 'is not installed'}</strong>
+                  <button
+                    className="warning-close"
+                    onClick={() => setShowSystemWarning(false)}
+                    title="Dismiss"
+                  >
+                    ×
+                  </button>
+                </div>
+                <p className="warning-message">{systemStatus.message}</p>
+
+                {!systemStatus.postgresInstalled && (
+                  <div className="warning-actions">
+                    <p><strong>Install PostgreSQL:</strong></p>
+                    <button
+                      className="btn btn-warning"
+                      onClick={() => window.electronAPI.openExternalUrl(systemStatus.installUrl)}
+                    >
+                      Download PostgreSQL
+                    </button>
+                    <p className="warning-alt">Or use Docker:</p>
+                    <code className="docker-command">{systemStatus.dockerCommand}</code>
+                  </div>
+                )}
+
+                {systemStatus.postgresInstalled && !systemStatus.postgresRunning && (
+                  <div className="warning-actions">
+                    <p><strong>Start PostgreSQL service:</strong></p>
+                    <ol>
+                      <li>Press <code>Win + R</code>, type <code>services.msc</code>, press Enter</li>
+                      <li>Find "postgresql" in the list</li>
+                      <li>Right-click → <strong>Start</strong></li>
+                    </ol>
+                    <button
+                      className="btn btn-warning"
+                      onClick={async () => {
+                        const status = await window.electronAPI.checkPostgresInstalled();
+                        setSystemStatus({
+                          checked: true,
+                          postgresInstalled: status.installed,
+                          postgresRunning: status.running,
+                          message: status.message,
+                          installUrl: status.installUrl,
+                          dockerCommand: status.dockerCommand
+                        });
+                        if (status.running) {
+                          setShowSystemWarning(false);
+                          validatePostgresConnection();
+                        }
+                      }}
+                    >
+                      Check Again
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
 
             <FileSelector
               inputPath={inputPath}
@@ -485,6 +607,7 @@ const App: React.FC = () => {
                 <li>Ensure PostgreSQL is running and configured in Settings</li>
               </ul>
             </div>
+            </div>{/* End main-view-scroll */}
           </div>
         );
     }
@@ -598,6 +721,102 @@ const App: React.FC = () => {
           font-size: 12px;
         }
 
+        .btn-warning {
+          background: #f0ad4e;
+          color: #333;
+          border: none;
+        }
+
+        .btn-warning:hover {
+          background: #ec971f;
+        }
+
+        .system-warning {
+          background: #fff3cd;
+          border: 1px solid #ffc107;
+          border-radius: 8px;
+          padding: 16px;
+        }
+
+        .warning-header {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          margin-bottom: 8px;
+        }
+
+        .warning-icon {
+          font-size: 20px;
+        }
+
+        .warning-close {
+          margin-left: auto;
+          background: none;
+          border: none;
+          font-size: 24px;
+          cursor: pointer;
+          color: #856404;
+          padding: 0 4px;
+          line-height: 1;
+        }
+
+        .warning-close:hover {
+          color: #533f03;
+        }
+
+        .warning-message {
+          color: #856404;
+          margin-bottom: 12px;
+        }
+
+        .warning-actions {
+          background: rgba(255,255,255,0.5);
+          border-radius: 6px;
+          padding: 12px;
+        }
+
+        .warning-actions p {
+          margin: 0 0 8px 0;
+          color: #333;
+        }
+
+        .warning-actions ol {
+          margin: 8px 0;
+          padding-left: 20px;
+          color: #555;
+        }
+
+        .warning-actions li {
+          margin: 4px 0;
+        }
+
+        .warning-actions code {
+          background: #e9ecef;
+          padding: 2px 6px;
+          border-radius: 3px;
+          font-family: 'Consolas', monospace;
+          font-size: 12px;
+        }
+
+        .warning-alt {
+          margin-top: 12px !important;
+          color: #666 !important;
+          font-size: 13px;
+        }
+
+        .docker-command {
+          display: block;
+          background: #2d2d2d;
+          color: #f8f8f2;
+          padding: 10px 12px;
+          border-radius: 4px;
+          font-family: 'Consolas', monospace;
+          font-size: 11px;
+          overflow-x: auto;
+          white-space: nowrap;
+          margin-top: 8px;
+        }
+
         .status-panel {
           background: white;
           border-radius: 8px;
@@ -638,7 +857,36 @@ const App: React.FC = () => {
         .main-view {
           display: flex;
           flex-direction: column;
+          height: 100%;
+          max-height: calc(100vh - 150px);
+        }
+
+        .main-view-scroll {
+          flex: 1;
+          overflow-y: auto;
+          display: flex;
+          flex-direction: column;
           gap: 24px;
+          padding-right: 8px;
+          margin-right: -8px;
+        }
+
+        .main-view-scroll::-webkit-scrollbar {
+          width: 8px;
+        }
+
+        .main-view-scroll::-webkit-scrollbar-track {
+          background: #f0f0f0;
+          border-radius: 4px;
+        }
+
+        .main-view-scroll::-webkit-scrollbar-thumb {
+          background: #ccc;
+          border-radius: 4px;
+        }
+
+        .main-view-scroll::-webkit-scrollbar-thumb:hover {
+          background: #aaa;
         }
 
         .actions {
