@@ -1,0 +1,35 @@
+{
+  "evolutionId": "evo-003",
+  "event": "COUNCIL_PRE_EVOLVE",
+  "timestamp": "2026-01-23T02:25:00Z",
+  "governanceTier": "MAJOR",
+  "context": "MAINTENANCE",
+  "reviewType": "APPROACH_SELECTION",
+  "reviewPackage": {
+    "goal": "Stöd för Odoo 17→18 migration",
+    "timelines": ["alpha", "beta", "gamma"],
+    "existingPattern": "src/migration/odoo-16-to-17.ts (15 scripts, 438 lines)"
+  },
+  "aiVerdicts": [
+    {
+      "judge": "claude-opus-4",
+      "verdict": "RECOMMEND_ALPHA",
+      "confidence": "HIGH",
+      "rationale": "Alpha (Modular Scripts) perfectly aligns with the established pattern and team priorities. The current 16→17 implementation is proven, maintainable, and understood. Adding odoo-17-to-18.ts as a parallel file follows the existing architecture exactly, requires zero new abstractions, and minimizes risk for production data handling. Both previous evolutions chose simplicity over sophistication—this should too.",
+      "concerns": "Code duplication between version files is acceptable at this scale (2-3 versions). If the tool eventually supports 5+ versions, consider extracting common patterns into shared utilities (a gentle refactor, not a rewrite). The BETA config-driven approach becomes compelling only when managing 4+ version paths.",
+      "votedAt": "2026-01-23T02:25:00Z"
+    }
+  ],
+  "humanVotes": [],
+  "consensus": {
+    "recommendation": "ALPHA",
+    "rationale": "Follow established pattern, minimize risk for MAJOR tier",
+    "skipOtherTimelines": true
+  },
+  "historicalContext": {
+    "evo-001": "Beta won - simple disk extraction over streaming/Docker",
+    "evo-002": "Beta won - Electron stability over Tauri performance",
+    "pattern": "Team consistently favors proven/simple over cutting-edge"
+  },
+  "status": "PENDING_USER_DECISION"
+}

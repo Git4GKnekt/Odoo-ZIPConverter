@@ -1,0 +1,86 @@
+{
+  "reviewId": "council-evo-001-gen-001",
+  "evolutionId": "evo-001",
+  "generation": 1,
+  "timestamp": "2026-01-23T01:30:00Z",
+  "governanceTier": "MAJOR",
+  "subject": "Generation 1 Timeline Selection",
+  "context": "DATA_MIGRATION",
+
+  "reviewPackage": {
+    "goal": "Odoo Backup Migration Tool (16→17)",
+    "timelines": {
+      "alpha": { "fitness": 72, "approach": "Streaming Pipeline" },
+      "beta": { "fitness": 78, "approach": "Full Extraction" },
+      "gamma": { "fitness": 75, "approach": "Docker-Orchestrated" }
+    },
+    "recommendation": "beta",
+    "rationale": "Beta leads with simplicity-first approach, 15 migration scripts, easy debugging"
+  },
+
+  "aiVerdicts": {
+    "claude": {
+      "model": "claude-opus-4-5",
+      "vote": "APPROVE_BETA",
+      "confidence": 0.85,
+      "reasoning": "Beta's simplicity (0.9) makes it ideal for initial deployment. The linear workflow reduces risk during critical data migration. However, recommend keeping Alpha patterns available for large backup scenarios.",
+      "concerns": [
+        "Beta's disk space requirements for large backups",
+        "Should add streaming option for >10GB backups"
+      ],
+      "suggestions": [
+        "Consider Beta + Alpha hybrid for production",
+        "Add backup size detection to auto-select approach"
+      ]
+    },
+    "gpt4": {
+      "model": "gpt-4-turbo",
+      "vote": "APPROVE_BETA",
+      "confidence": 0.78,
+      "reasoning": "Simple extraction approach is battle-tested. PostgreSQL handles the heavy lifting for migrations. Code is maintainable and debuggable.",
+      "concerns": [
+        "PostgreSQL dependency may limit deployment options",
+        "Memory peaks during large table operations"
+      ],
+      "suggestions": [
+        "Add progress reporting for long migrations",
+        "Consider connection pooling for stability"
+      ]
+    },
+    "gemini": {
+      "model": "gemini-pro",
+      "vote": "APPROVE_BETA_WITH_GAMMA_OPTION",
+      "confidence": 0.72,
+      "reasoning": "Beta provides lowest barrier to entry. However, Gamma's Docker isolation is valuable for production reliability. Recommend Beta as default with Gamma as --isolated flag.",
+      "concerns": [
+        "Version compatibility without Docker pinning",
+        "Gamma's test suite should be ported to Beta"
+      ],
+      "suggestions": [
+        "Merge Gamma's test patterns into Beta",
+        "Add Docker mode as optional feature"
+      ]
+    }
+  },
+
+  "humanVotingRequired": true,
+  "humanVotingStatus": "PENDING",
+  "slackChannel": "#metamorphosis-council",
+  "votingDeadline": "2026-01-23T12:00:00Z",
+
+  "consensusThreshold": {
+    "aiQuorum": 2,
+    "humanRequired": 1,
+    "majorityPercent": 66
+  },
+
+  "currentConsensus": {
+    "aiVotes": {
+      "approve_beta": 2,
+      "approve_beta_with_gamma": 1,
+      "reject": 0
+    },
+    "humanVotes": {},
+    "status": "AWAITING_HUMAN_VOTE"
+  }
+}

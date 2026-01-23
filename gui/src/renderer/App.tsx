@@ -1,0 +1,596 @@
+/**
+ * BETA Timeline - Main React Application
+ * Odoo ZIPConverter Desktop UI
+ */
+
+import React, { useState, useEffect, useCallback } from 'react';
+import FileSelector from './components/FileSelector';
+import MigrationProgress from './components/MigrationProgress';
+import Settings from './components/Settings';
+
+// Get the Electron API from preload
+declare global {
+  interface Window {
+    electronAPI: {
+      openFileDialog: (options?: {
+        title?: string;
+        filters?: Array<{ name: string; extensions: string[] }>;
+        defaultPath?: string;
+      }) => Promise<string | null>;
+      saveFileDialog: (options?: {
+        title?: string;
+        filters?: Array<{ name: string; extensions: string[] }>;
+        defaultPath?: string;
+      }) => Promise<string | null>;
+      loadSettings: () => Promise<{
+        postgres: PostgresConfig;
+        recentFiles: string[];
+      }>;
+      saveSettings: (settings: { postgres?: PostgresConfig }) => Promise<boolean>;
+      startMigration: (config: MigrationConfig) => Promise<MigrationResult>;
+      cancelMigration: () => Promise<boolean>;
+      validatePostgres: (config: PostgresConfig) => Promise<{ valid: boolean; message: string }>;
+      onMigrationProgress: (callback: (update: ProgressUpdate) => void) => () => void;
+      onTrayStartMigration: (callback: () => void) => () => void;
+      onTrayOpenSettings: (callback: () => void) => () => void;
+    };
+  }
+}
+
+interface PostgresConfig {
+  host: string;
+  port: number;
+  user: string;
+  password: string;
+}
+
+interface MigrationConfig {
+  inputPath: string;
+  outputPath: string;
+  postgresConfig: PostgresConfig;
+  keepTemp?: boolean;
+  verbose?: boolean;
+}
+
+interface MigrationResult {
+  success: boolean;
+  sourceVersion: string;
+  targetVersion: string;
+  migrationsApplied: string[];
+  errors: Array<{ phase: string; message: string; recoverable: boolean }>;
+  warnings: string[];
+  duration: number;
+}
+
+interface ProgressUpdate {
+  phase: 'extraction' | 'database' | 'migration' | 'export';
+  status: 'pending' | 'running' | 'completed' | 'failed';
+  progress: number;
+  message: string;
+  details?: Record<string, unknown>;
+}
+
+type AppView = 'main' | 'settings' | 'progress' | 'result';
+
+const App: React.FC = () => {
+  // Application state
+  const [view, setView] = useState<AppView>('main');
+  const [inputPath, setInputPath] = useState<string>('');
+  const [outputPath, setOutputPath] = useState<string>('');
+  const [postgresConfig, setPostgresConfig] = useState<PostgresConfig>({
+    host: 'localhost',
+    port: 5432,
+    user: 'postgres',
+    password: ''
+  });
+  const [recentFiles, setRecentFiles] = useState<string[]>([]);
+
+  // Migration state
+  const [isRunning, setIsRunning] = useState(false);
+  const [progress, setProgress] = useState<ProgressUpdate | null>(null);
+  const [result, setResult] = useState<MigrationResult | null>(null);
+
+  // Load settings on mount
+  useEffect(() => {
+    const loadInitialSettings = async () => {
+      try {
+        const settings = await window.electronAPI.loadSettings();
+        setPostgresConfig(settings.postgres);
+        setRecentFiles(settings.recentFiles || []);
+      } catch (err) {
+        console.error('Failed to load settings:', err);
+      }
+    };
+
+    loadInitialSettings();
+  }, []);
+
+  // Register event listeners
+  useEffect(() => {
+    const unsubProgress = window.electronAPI.onMigrationProgress((update) => {
+      setProgress(update);
+    });
+
+    const unsubTrayMigration = window.electronAPI.onTrayStartMigration(() => {
+      setView('main');
+    });
+
+    const unsubTraySettings = window.electronAPI.onTrayOpenSettings(() => {
+      setView('settings');
+    });
+
+    return () => {
+      unsubProgress();
+      unsubTrayMigration();
+      unsubTraySettings();
+    };
+  }, []);
+
+  // Handle input file selection
+  const handleSelectInput = useCallback(async () => {
+    const path = await window.electronAPI.openFileDialog({
+      title: 'Select Odoo 16 Backup File',
+      filters: [
+        { name: 'ZIP Archives', extensions: ['zip'] },
+        { name: 'All Files', extensions: ['*'] }
+      ]
+    });
+
+    if (path) {
+      setInputPath(path);
+
+      // Auto-suggest output path
+      if (!outputPath) {
+        const suggestedOutput = path.replace(/\.zip$/i, '-odoo17.zip');
+        setOutputPath(suggestedOutput);
+      }
+    }
+  }, [outputPath]);
+
+  // Handle output file selection
+  const handleSelectOutput = useCallback(async () => {
+    const path = await window.electronAPI.saveFileDialog({
+      title: 'Save Migrated Backup',
+      filters: [{ name: 'ZIP Archives', extensions: ['zip'] }],
+      defaultPath: outputPath || 'migrated-backup.zip'
+    });
+
+    if (path) {
+      setOutputPath(path);
+    }
+  }, [outputPath]);
+
+  // Handle recent file selection
+  const handleRecentFileSelect = useCallback((path: string) => {
+    setInputPath(path);
+    if (!outputPath) {
+      const suggestedOutput = path.replace(/\.zip$/i, '-odoo17.zip');
+      setOutputPath(suggestedOutput);
+    }
+  }, [outputPath]);
+
+  // Start migration
+  const handleStartMigration = useCallback(async () => {
+    if (!inputPath || !outputPath) {
+      return;
+    }
+
+    setIsRunning(true);
+    setResult(null);
+    setProgress(null);
+    setView('progress');
+
+    try {
+      const migrationResult = await window.electronAPI.startMigration({
+        inputPath,
+        outputPath,
+        postgresConfig
+      });
+
+      setResult(migrationResult);
+      setView('result');
+    } catch (err) {
+      console.error('Migration error:', err);
+      setResult({
+        success: false,
+        sourceVersion: '16.0',
+        targetVersion: '17.0',
+        migrationsApplied: [],
+        errors: [{
+          phase: 'migration',
+          message: err instanceof Error ? err.message : 'Unknown error',
+          recoverable: false
+        }],
+        warnings: [],
+        duration: 0
+      });
+      setView('result');
+    } finally {
+      setIsRunning(false);
+    }
+  }, [inputPath, outputPath, postgresConfig]);
+
+  // Cancel migration
+  const handleCancelMigration = useCallback(async () => {
+    await window.electronAPI.cancelMigration();
+    setIsRunning(false);
+    setView('main');
+  }, []);
+
+  // Save settings
+  const handleSaveSettings = useCallback(async (newConfig: PostgresConfig) => {
+    setPostgresConfig(newConfig);
+    await window.electronAPI.saveSettings({ postgres: newConfig });
+    setView('main');
+  }, []);
+
+  // Reset to main view
+  const handleBackToMain = useCallback(() => {
+    setView('main');
+    setProgress(null);
+    setResult(null);
+  }, []);
+
+  // Validate PostgreSQL connection
+  const handleValidatePostgres = useCallback(async (): Promise<{ valid: boolean; message: string }> => {
+    return window.electronAPI.validatePostgres(postgresConfig);
+  }, [postgresConfig]);
+
+  // Render current view
+  const renderView = () => {
+    switch (view) {
+      case 'settings':
+        return (
+          <Settings
+            config={postgresConfig}
+            onSave={handleSaveSettings}
+            onCancel={() => setView('main')}
+            onValidate={handleValidatePostgres}
+          />
+        );
+
+      case 'progress':
+        return (
+          <MigrationProgress
+            progress={progress}
+            onCancel={handleCancelMigration}
+          />
+        );
+
+      case 'result':
+        return (
+          <div className="result-view">
+            <div className={`result-header ${result?.success ? 'success' : 'error'}`}>
+              <span className="result-icon">
+                {result?.success ? '[OK]' : '[X]'}
+              </span>
+              <h2>{result?.success ? 'Migration Successful' : 'Migration Failed'}</h2>
+            </div>
+
+            {result?.success && (
+              <div className="result-details">
+                <p>
+                  <strong>Migrated:</strong> {result.sourceVersion} to {result.targetVersion}
+                </p>
+                <p>
+                  <strong>Duration:</strong> {(result.duration / 1000).toFixed(1)}s
+                </p>
+                <p>
+                  <strong>Scripts Applied:</strong> {result.migrationsApplied.length}
+                </p>
+                {result.warnings.length > 0 && (
+                  <div className="warnings">
+                    <h4>Warnings:</h4>
+                    <ul>
+                      {result.warnings.map((w, i) => (
+                        <li key={i}>{w}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+                <p className="output-path">
+                  <strong>Output:</strong> {outputPath}
+                </p>
+              </div>
+            )}
+
+            {!result?.success && (
+              <div className="error-details">
+                <h4>Errors:</h4>
+                <ul>
+                  {result?.errors.map((e, i) => (
+                    <li key={i}>
+                      <span className="error-phase">[{e.phase}]</span> {e.message}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            <div className="result-actions">
+              <button className="btn btn-primary" onClick={handleBackToMain}>
+                Back to Main
+              </button>
+              {result?.success && (
+                <button
+                  className="btn btn-secondary"
+                  onClick={() => {
+                    setInputPath('');
+                    setOutputPath('');
+                    handleBackToMain();
+                  }}
+                >
+                  New Migration
+                </button>
+              )}
+            </div>
+          </div>
+        );
+
+      case 'main':
+      default:
+        return (
+          <div className="main-view">
+            <FileSelector
+              inputPath={inputPath}
+              outputPath={outputPath}
+              recentFiles={recentFiles}
+              onSelectInput={handleSelectInput}
+              onSelectOutput={handleSelectOutput}
+              onRecentSelect={handleRecentFileSelect}
+              onInputChange={setInputPath}
+              onOutputChange={setOutputPath}
+            />
+
+            <div className="actions">
+              <button
+                className="btn btn-primary btn-large"
+                onClick={handleStartMigration}
+                disabled={!inputPath || !outputPath || isRunning}
+              >
+                Start Migration
+              </button>
+
+              <button
+                className="btn btn-secondary"
+                onClick={() => setView('settings')}
+              >
+                Settings
+              </button>
+            </div>
+
+            <div className="info-panel">
+              <h4>Migration Info</h4>
+              <p>This tool migrates Odoo backup files from version 16 to 17.</p>
+              <ul>
+                <li>Select your Odoo 16 backup ZIP file</li>
+                <li>Choose where to save the migrated backup</li>
+                <li>Ensure PostgreSQL is running and configured in Settings</li>
+              </ul>
+            </div>
+          </div>
+        );
+    }
+  };
+
+  return (
+    <div className="app">
+      <header className="app-header">
+        <h1>Odoo ZIPConverter</h1>
+        <span className="version">v1.0.0</span>
+      </header>
+
+      <main className="app-content">
+        {renderView()}
+      </main>
+
+      <footer className="app-footer">
+        <span>Odoo Backup Migration Tool (16 to 17)</span>
+      </footer>
+
+      <style>{`
+        * {
+          box-sizing: border-box;
+          margin: 0;
+          padding: 0;
+        }
+
+        .app {
+          display: flex;
+          flex-direction: column;
+          min-height: 100vh;
+          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+          background: #f5f5f5;
+          color: #333;
+        }
+
+        .app-header {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          padding: 16px 24px;
+          background: linear-gradient(135deg, #714B67 0%, #875A7B 100%);
+          color: white;
+          -webkit-app-region: drag;
+        }
+
+        .app-header h1 {
+          font-size: 20px;
+          font-weight: 600;
+        }
+
+        .version {
+          font-size: 12px;
+          opacity: 0.8;
+        }
+
+        .app-content {
+          flex: 1;
+          padding: 24px;
+          overflow-y: auto;
+        }
+
+        .app-footer {
+          padding: 12px 24px;
+          background: #e0e0e0;
+          font-size: 12px;
+          color: #666;
+          text-align: center;
+        }
+
+        .btn {
+          padding: 10px 20px;
+          border: none;
+          border-radius: 6px;
+          font-size: 14px;
+          font-weight: 500;
+          cursor: pointer;
+          transition: all 0.2s;
+        }
+
+        .btn:disabled {
+          opacity: 0.5;
+          cursor: not-allowed;
+        }
+
+        .btn-primary {
+          background: #714B67;
+          color: white;
+        }
+
+        .btn-primary:hover:not(:disabled) {
+          background: #5a3c52;
+        }
+
+        .btn-secondary {
+          background: #e0e0e0;
+          color: #333;
+        }
+
+        .btn-secondary:hover:not(:disabled) {
+          background: #d0d0d0;
+        }
+
+        .btn-large {
+          padding: 14px 32px;
+          font-size: 16px;
+        }
+
+        .main-view {
+          display: flex;
+          flex-direction: column;
+          gap: 24px;
+        }
+
+        .actions {
+          display: flex;
+          gap: 12px;
+          justify-content: center;
+        }
+
+        .info-panel {
+          background: white;
+          border-radius: 8px;
+          padding: 16px;
+          box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+
+        .info-panel h4 {
+          margin-bottom: 8px;
+          color: #714B67;
+        }
+
+        .info-panel ul {
+          margin-left: 20px;
+          margin-top: 8px;
+        }
+
+        .info-panel li {
+          margin: 4px 0;
+          color: #666;
+        }
+
+        .result-view {
+          background: white;
+          border-radius: 8px;
+          padding: 24px;
+          box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+
+        .result-header {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          margin-bottom: 20px;
+          padding-bottom: 16px;
+          border-bottom: 1px solid #eee;
+        }
+
+        .result-header.success .result-icon {
+          color: #28a745;
+          font-size: 24px;
+        }
+
+        .result-header.error .result-icon {
+          color: #dc3545;
+          font-size: 24px;
+        }
+
+        .result-details p {
+          margin: 8px 0;
+        }
+
+        .output-path {
+          margin-top: 16px;
+          padding: 12px;
+          background: #f0f0f0;
+          border-radius: 4px;
+          word-break: break-all;
+        }
+
+        .error-details {
+          background: #fff5f5;
+          border: 1px solid #ffcccc;
+          border-radius: 4px;
+          padding: 16px;
+          margin-bottom: 20px;
+        }
+
+        .error-details h4 {
+          color: #dc3545;
+          margin-bottom: 8px;
+        }
+
+        .error-details li {
+          margin: 4px 0;
+        }
+
+        .error-phase {
+          color: #666;
+          font-size: 12px;
+        }
+
+        .warnings {
+          background: #fff9e6;
+          border: 1px solid #ffe066;
+          border-radius: 4px;
+          padding: 12px;
+          margin: 16px 0;
+        }
+
+        .warnings h4 {
+          color: #856404;
+          margin-bottom: 8px;
+        }
+
+        .result-actions {
+          display: flex;
+          gap: 12px;
+          margin-top: 24px;
+        }
+      `}</style>
+    </div>
+  );
+};
+
+export default App;

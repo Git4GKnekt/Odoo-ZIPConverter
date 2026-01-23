@@ -1,0 +1,23 @@
+{
+  "evolutionId": "evo-003",
+  "event": "AWAKEN",
+  "timestamp": "2026-01-23T02:20:00Z",
+  "decision": {
+    "type": "EVOLUTION_START",
+    "context": "MAINTENANCE",
+    "governanceTier": "MAJOR",
+    "timelines": ["alpha", "beta", "gamma"],
+    "goal": "Stöd för Odoo 17→18 migration"
+  },
+  "rationale": "Three approaches for extending migration support: modular scripts (extensible), config-driven (declarative), plugin system (third-party). MAJOR tier - production data handling.",
+  "approvedBy": "auto-start",
+  "previousEvolutions": [
+    { "id": "evo-001", "winner": "beta", "provides": "migrate() function" },
+    { "id": "evo-002", "winner": "beta", "provides": "Electron GUI" }
+  ],
+  "existingCode": {
+    "location": "src/migration/odoo-16-to-17.ts",
+    "pattern": "Array of MigrationScript objects with SQL",
+    "scriptsCount": 15
+  }
+}

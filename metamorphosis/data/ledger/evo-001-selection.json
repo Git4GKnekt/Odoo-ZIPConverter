@@ -1,0 +1,44 @@
+{
+  "evolutionId": "evo-001",
+  "event": "WINNER_SELECTED",
+  "timestamp": "2026-01-23T01:35:00Z",
+
+  "selection": {
+    "winner": "beta",
+    "fitness": 78,
+    "name": "Full Extraction",
+    "approach": "Simple disk-based workflow"
+  },
+
+  "governance": {
+    "tier": "MAJOR",
+    "councilReview": "council-evo-001-gen-001",
+    "aiConsensus": "APPROVE_BETA",
+    "humanApproval": true,
+    "overrideNote": "Fitness 78 below 85 threshold - human override accepted"
+  },
+
+  "rationale": {
+    "primary": "Simplicity-first approach minimizes risk for critical data migrations",
+    "councilRecommendations": [
+      "Keep Alpha patterns for large backup streaming",
+      "Add Gamma's Docker mode as optional feature",
+      "Port test suite from Gamma to Beta"
+    ],
+    "humanReason": "Selected via /select beta command after Council review"
+  },
+
+  "archivedTimelines": {
+    "alpha": "data/evolution/alpha - Preserved for streaming patterns",
+    "gamma": "data/evolution/gamma - Preserved for Docker isolation and tests"
+  },
+
+  "winnerLocation": "data/winners/beta-evo-001",
+
+  "nextSteps": [
+    "Copy winner to project src/ directory",
+    "Add comprehensive test suite",
+    "Configure for production deployment",
+    "Consider Alpha/Gamma feature merges"
+  ]
+}

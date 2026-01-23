@@ -1,0 +1,38 @@
+{
+  "evolutionId": "evo-003",
+  "event": "SELECT_WINNER",
+  "timestamp": "2026-01-23T02:30:00Z",
+  "decision": {
+    "type": "DIRECT_IMPLEMENTATION",
+    "selectedTimeline": "alpha",
+    "selectionMethod": "COUNCIL_PRE_APPROVE",
+    "governanceTier": "MAJOR",
+    "skippedParallelEvolution": true
+  },
+  "winner": {
+    "timeline": "alpha",
+    "name": "Modular Scripts",
+    "approach": "Separate migration files per version following existing pattern",
+    "deployedTo": "src/migration/"
+  },
+  "implementation": {
+    "filesCreated": [
+      "src/migration/odoo-17-to-18.ts"
+    ],
+    "filesModified": [
+      "src/migration/index.ts"
+    ],
+    "features": [
+      "17 migration scripts for 17→18 upgrade",
+      "Auto-detection of migration path",
+      "Backwards compatible API",
+      "Version validation pre-migration"
+    ]
+  },
+  "councilAlignment": true,
+  "rationale": "Council pre-approved Alpha approach before development. Modular pattern matches existing code, minimizes risk for MAJOR tier governance.",
+  "migrationPaths": {
+    "16-to-17": { "scripts": 15, "status": "existing" },
+    "17-to-18": { "scripts": 17, "status": "new" }
+  }
+}

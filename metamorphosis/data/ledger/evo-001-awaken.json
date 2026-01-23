@@ -1,0 +1,14 @@
+{
+  "evolutionId": "evo-001",
+  "event": "AWAKEN",
+  "timestamp": "2026-01-23T00:00:00Z",
+  "decision": {
+    "type": "EVOLUTION_START",
+    "context": "DATA_MIGRATION",
+    "governanceTier": "MAJOR",
+    "timelines": ["alpha", "beta", "gamma"],
+    "goal": "Odoo Backup Migration Tool (16→17)"
+  },
+  "rationale": "Three distinct approaches identified: streaming (memory-efficient), extraction (simple), containerized (isolated). MAJOR tier due to production data handling.",
+  "approvedBy": "auto-start"
+}
