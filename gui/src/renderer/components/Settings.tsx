@@ -125,6 +125,8 @@ const Settings: React.FC<SettingsProps> = ({
         </p>
       </div>
 
+      <div className="settings-scroll-container">
+
       <form className="settings-form" onSubmit={(e) => e.preventDefault()}>
         {/* Host */}
         <div className={`form-group ${errors.host ? 'has-error' : ''}`}>
@@ -214,25 +216,36 @@ const Settings: React.FC<SettingsProps> = ({
 
       {/* Help Panel */}
       <div className="settings-help">
-        <h4>Where to find your PostgreSQL credentials?</h4>
+        <h4>PostgreSQL Setup Guide</h4>
         <div className="help-content">
-          <p><strong>Default values:</strong></p>
+          <p><strong>Recommended values:</strong></p>
           <ul>
-            <li><strong>Host:</strong> localhost (if PostgreSQL runs locally)</li>
-            <li><strong>Port:</strong> 5432 (standard PostgreSQL port)</li>
-            <li><strong>Username:</strong> postgres (default admin user)</li>
-            <li><strong>Password:</strong> Set during PostgreSQL installation</li>
+            <li><strong>Host:</strong> localhost</li>
+            <li><strong>Port:</strong> 5432 (default)</li>
+            <li><strong>Username:</strong> postgres (default superuser)</li>
+            <li><strong>Password:</strong> The password you set during installation</li>
+          </ul>
+
+          <p><strong>During PostgreSQL installation:</strong></p>
+          <ul>
+            <li>Choose a password for the "postgres" superuser - <em>remember this!</em></li>
+            <li>Keep the default port 5432</li>
+            <li>When "Stack Builder" appears at the end - click <strong>Cancel</strong> (not needed)</li>
           </ul>
 
           <p><strong>If you forgot your password:</strong></p>
           <ul>
-            <li>Check pgAdmin if installed (right-click server → Properties)</li>
-            <li>Windows: Search "Services", find PostgreSQL, note the user</li>
-            <li>Reset via pg_hba.conf (change auth to "trust" temporarily)</li>
+            <li>Open pgAdmin (installed with PostgreSQL)</li>
+            <li>Right-click server → Properties → Connection tab</li>
+            <li>Or reinstall PostgreSQL with a new password</li>
           </ul>
 
-          <p><strong>Check if PostgreSQL is running:</strong></p>
-          <code>netstat -ano | findstr :5432</code>
+          <p><strong>Verify PostgreSQL is running:</strong></p>
+          <ol>
+            <li>Press <code>Win + R</code>, type <code>services.msc</code></li>
+            <li>Find "postgresql" in the list</li>
+            <li>Status should show "Running"</li>
+          </ol>
         </div>
       </div>
 
@@ -245,6 +258,8 @@ const Settings: React.FC<SettingsProps> = ({
           <li>Sufficient disk space for temporary database</li>
         </ul>
       </div>
+
+      </div>{/* End scroll container */}
 
       {/* Actions */}
       <div className="settings-actions">
@@ -267,6 +282,34 @@ const Settings: React.FC<SettingsProps> = ({
           border-radius: 8px;
           padding: 24px;
           box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+          display: flex;
+          flex-direction: column;
+          max-height: calc(100vh - 150px);
+        }
+
+        .settings-scroll-container {
+          flex: 1;
+          overflow-y: auto;
+          padding-right: 8px;
+          margin-right: -8px;
+        }
+
+        .settings-scroll-container::-webkit-scrollbar {
+          width: 8px;
+        }
+
+        .settings-scroll-container::-webkit-scrollbar-track {
+          background: #f0f0f0;
+          border-radius: 4px;
+        }
+
+        .settings-scroll-container::-webkit-scrollbar-thumb {
+          background: #ccc;
+          border-radius: 4px;
+        }
+
+        .settings-scroll-container::-webkit-scrollbar-thumb:hover {
+          background: #aaa;
         }
 
         .settings-header {
