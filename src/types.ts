@@ -12,10 +12,15 @@ export interface PostgresConfig {
   adminDatabase?: string;
 }
 
+/** Supported migration paths */
+export type MigrationPath = '16-to-17' | '17-to-18';
+
 export interface MigrationConfig {
   inputPath: string;
   outputPath: string;
   postgresConfig: PostgresConfig;
+  /** Migration path to use (auto-detected if not specified) */
+  migrationPath?: MigrationPath;
   /** Keep temp files after completion (for debugging) */
   keepTemp?: boolean;
   /** Custom temp directory base path */

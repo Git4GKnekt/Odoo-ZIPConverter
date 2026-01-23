@@ -35,7 +35,7 @@ import {
   verifyConnection,
   getDatabaseSize
 } from './database';
-import { runMigration, TARGET_VERSION } from './migration';
+import { runMigration, getMigrationPathInfo, MigrationPath } from './migration';
 
 /**
  * Create a simple console logger
@@ -90,8 +90,25 @@ export async function migrate(config: MigrationConfig): Promise<MigrationResult>
     const sourceVersion = extractionContext.contents.manifest.version;
     logger.info('Source backup version', { version: sourceVersion });
 
-    if (!sourceVersion.startsWith('16.')) {
-      logger.warn('Source version is not 16.x, migration may have unexpected results');
+    // Determine migration path
+    let migrationPath: MigrationPath | undefined = config.migrationPath;
+    if (!migrationPath) {
+      // Auto-detect from source version
+      if (sourceVersion.startsWith('16.')) {
+        migrationPath = '16-to-17';
+      } else if (sourceVersion.startsWith('17.')) {
+        migrationPath = '17-to-18';
+      } else {
+        logger.warn('Could not auto-detect migration path, defaulting to 16-to-17');
+        migrationPath = '16-to-17';
+      }
+      logger.info('Auto-detected migration path', { path: migrationPath });
+    }
+
+    const pathInfo = getMigrationPathInfo(migrationPath);
+    const expectedPrefix = pathInfo.source.split('.')[0] + '.';
+    if (!sourceVersion.startsWith(expectedPrefix)) {
+      logger.warn(`Source version ${sourceVersion} does not match expected ${pathInfo.source}, migration may have unexpected results`);
     }
 
     // ===== PHASE 2: Database Setup =====
@@ -111,7 +128,7 @@ export async function migrate(config: MigrationConfig): Promise<MigrationResult>
 
     // ===== PHASE 3: Migration =====
     logger.info('--- Phase 3: Migration ---');
-    const migrationResult = await runMigration(pool, logger);
+    const migrationResult = await runMigration(pool, logger, migrationPath);
 
     if (!migrationResult.success) {
       logger.error('Migration failed', {
@@ -146,7 +163,7 @@ export async function migrate(config: MigrationConfig): Promise<MigrationResult>
     // Update manifest
     const originalDbName = extractionContext.contents.manifest.db_name;
     updateManifest(extractionContext.contents.manifestPath, {
-      version: TARGET_VERSION,
+      version: pathInfo.target,
       db_name: originalDbName // Keep original DB name
     }, logger);
 
@@ -171,10 +188,15 @@ export async function migrate(config: MigrationConfig): Promise<MigrationResult>
       stack: (err as Error).stack
     });
 
+    // Get version info for error response
+    const errorPathInfo = config.migrationPath
+      ? getMigrationPathInfo(config.migrationPath)
+      : { source: '16.0', target: '17.0' };
+
     return {
       success: false,
-      sourceVersion: '16.0',
-      targetVersion: TARGET_VERSION,
+      sourceVersion: errorPathInfo.source,
+      targetVersion: errorPathInfo.target,
       migrationsApplied: [],
       errors: [{
         phase: 'migration',
@@ -314,4 +336,4 @@ if (require.main === module) {
 }
 
 // Export for programmatic use
-export { MigrationConfig, MigrationResult } from './types';
+export { MigrationConfig, MigrationResult, MigrationPath } from './types';

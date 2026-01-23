@@ -18,10 +18,13 @@ interface PostgresConfig {
   password: string;
 }
 
+type MigrationPath = '16-to-17' | '17-to-18';
+
 interface MigrationConfig {
   inputPath: string;
   outputPath: string;
   postgresConfig: PostgresConfig;
+  migrationPath?: MigrationPath;
   keepTemp?: boolean;
   verbose?: boolean;
 }
@@ -174,11 +177,12 @@ export function registerIpcHandlers(): void {
       const result = await runMigrationWithProgress(config, sendProgress);
 
       // Update tray and show notification
+      const { target } = getVersionInfo(config.migrationPath);
       if (result.success) {
         updateTrayStatus('success');
         showNotification(
           'Migration Complete',
-          `Successfully migrated ${path.basename(config.inputPath)} to Odoo 17`,
+          `Successfully migrated ${path.basename(config.inputPath)} to Odoo ${target.split('.')[0]}`,
           false
         );
       } else {
@@ -196,6 +200,7 @@ export function registerIpcHandlers(): void {
     } catch (err) {
       updateTrayStatus('error');
       const errorMessage = err instanceof Error ? err.message : 'Unknown error';
+      const { source, target } = getVersionInfo(config.migrationPath);
 
       showNotification('Migration Failed', errorMessage, true);
 
@@ -208,8 +213,8 @@ export function registerIpcHandlers(): void {
 
       return {
         success: false,
-        sourceVersion: '16.0',
-        targetVersion: '17.0',
+        sourceVersion: source,
+        targetVersion: target,
         migrationsApplied: [],
         errors: [{ phase: 'migration', message: errorMessage, recoverable: false }],
         warnings: [],
@@ -255,6 +260,15 @@ export function registerIpcHandlers(): void {
 }
 
 /**
+ * Get version info from migration path
+ */
+function getVersionInfo(migrationPath: MigrationPath = '16-to-17'): { source: string; target: string } {
+  return migrationPath === '16-to-17'
+    ? { source: '16.0', target: '17.0' }
+    : { source: '17.0', target: '18.0' };
+}
+
+/**
  * Run migration with progress callbacks
  * Calls the actual migration engine from src/
  */
@@ -262,6 +276,8 @@ async function runMigrationWithProgress(
   config: MigrationConfig,
   sendProgress: (update: ProgressUpdate) => void
 ): Promise<MigrationResult> {
+  const { source, target } = getVersionInfo(config.migrationPath);
+
   // Send initial progress for extraction phase
   sendProgress({
     phase: 'extraction',
@@ -276,6 +292,7 @@ async function runMigrationWithProgress(
       inputPath: config.inputPath,
       outputPath: config.outputPath,
       postgresConfig: config.postgresConfig,
+      migrationPath: config.migrationPath,
       keepTemp: config.keepTemp,
       verbose: config.verbose
     };
@@ -322,8 +339,8 @@ async function runMigrationWithProgress(
 
     return {
       success: false,
-      sourceVersion: '16.0',
-      targetVersion: '17.0',
+      sourceVersion: source,
+      targetVersion: target,
       migrationsApplied: [],
       errors: [{ phase: 'migration', message: errorMessage, recoverable: false }],
       warnings: [],

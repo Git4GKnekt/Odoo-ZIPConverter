@@ -44,10 +44,13 @@ interface PostgresConfig {
   password: string;
 }
 
+type MigrationPath = '16-to-17' | '17-to-18';
+
 interface MigrationConfig {
   inputPath: string;
   outputPath: string;
   postgresConfig: PostgresConfig;
+  migrationPath?: MigrationPath;
   keepTemp?: boolean;
   verbose?: boolean;
 }
@@ -77,6 +80,7 @@ const App: React.FC = () => {
   const [view, setView] = useState<AppView>('main');
   const [inputPath, setInputPath] = useState<string>('');
   const [outputPath, setOutputPath] = useState<string>('');
+  const [migrationPath, setMigrationPath] = useState<MigrationPath>('16-to-17');
   const [postgresConfig, setPostgresConfig] = useState<PostgresConfig>({
     host: 'localhost',
     port: 5432,
@@ -126,10 +130,18 @@ const App: React.FC = () => {
     };
   }, []);
 
+  // Get version info based on migration path
+  const getVersionInfo = useCallback(() => {
+    return migrationPath === '16-to-17'
+      ? { source: '16', target: '17' }
+      : { source: '17', target: '18' };
+  }, [migrationPath]);
+
   // Handle input file selection
   const handleSelectInput = useCallback(async () => {
+    const { source } = getVersionInfo();
     const path = await window.electronAPI.openFileDialog({
-      title: 'Select Odoo 16 Backup File',
+      title: `Select Odoo ${source} Backup File`,
       filters: [
         { name: 'ZIP Archives', extensions: ['zip'] },
         { name: 'All Files', extensions: ['*'] }
@@ -141,11 +153,12 @@ const App: React.FC = () => {
 
       // Auto-suggest output path
       if (!outputPath) {
-        const suggestedOutput = path.replace(/\.zip$/i, '-odoo17.zip');
+        const { target } = getVersionInfo();
+        const suggestedOutput = path.replace(/\.zip$/i, `-odoo${target}.zip`);
         setOutputPath(suggestedOutput);
       }
     }
-  }, [outputPath]);
+  }, [outputPath, getVersionInfo]);
 
   // Handle output file selection
   const handleSelectOutput = useCallback(async () => {
@@ -164,10 +177,11 @@ const App: React.FC = () => {
   const handleRecentFileSelect = useCallback((path: string) => {
     setInputPath(path);
     if (!outputPath) {
-      const suggestedOutput = path.replace(/\.zip$/i, '-odoo17.zip');
+      const { target } = getVersionInfo();
+      const suggestedOutput = path.replace(/\.zip$/i, `-odoo${target}.zip`);
       setOutputPath(suggestedOutput);
     }
-  }, [outputPath]);
+  }, [outputPath, getVersionInfo]);
 
   // Start migration
   const handleStartMigration = useCallback(async () => {
@@ -180,11 +194,14 @@ const App: React.FC = () => {
     setProgress(null);
     setView('progress');
 
+    const { source, target } = getVersionInfo();
+
     try {
       const migrationResult = await window.electronAPI.startMigration({
         inputPath,
         outputPath,
-        postgresConfig
+        postgresConfig,
+        migrationPath
       });
 
       setResult(migrationResult);
@@ -193,8 +210,8 @@ const App: React.FC = () => {
       console.error('Migration error:', err);
       setResult({
         success: false,
-        sourceVersion: '16.0',
-        targetVersion: '17.0',
+        sourceVersion: `${source}.0`,
+        targetVersion: `${target}.0`,
         migrationsApplied: [],
         errors: [{
           phase: 'migration',
@@ -208,7 +225,7 @@ const App: React.FC = () => {
     } finally {
       setIsRunning(false);
     }
-  }, [inputPath, outputPath, postgresConfig]);
+  }, [inputPath, outputPath, postgresConfig, migrationPath, getVersionInfo]);
 
   // Cancel migration
   const handleCancelMigration = useCallback(async () => {
@@ -329,8 +346,37 @@ const App: React.FC = () => {
 
       case 'main':
       default:
+        const versionInfo = getVersionInfo();
         return (
           <div className="main-view">
+            <div className="version-selector">
+              <h4>Migration Path</h4>
+              <div className="version-options">
+                <label className={`version-option ${migrationPath === '16-to-17' ? 'selected' : ''}`}>
+                  <input
+                    type="radio"
+                    name="migrationPath"
+                    value="16-to-17"
+                    checked={migrationPath === '16-to-17'}
+                    onChange={() => setMigrationPath('16-to-17')}
+                  />
+                  <span className="version-label">Odoo 16 → 17</span>
+                  <span className="version-scripts">15 scripts</span>
+                </label>
+                <label className={`version-option ${migrationPath === '17-to-18' ? 'selected' : ''}`}>
+                  <input
+                    type="radio"
+                    name="migrationPath"
+                    value="17-to-18"
+                    checked={migrationPath === '17-to-18'}
+                    onChange={() => setMigrationPath('17-to-18')}
+                  />
+                  <span className="version-label">Odoo 17 → 18</span>
+                  <span className="version-scripts">17 scripts</span>
+                </label>
+              </div>
+            </div>
+
             <FileSelector
               inputPath={inputPath}
               outputPath={outputPath}
@@ -348,7 +394,7 @@ const App: React.FC = () => {
                 onClick={handleStartMigration}
                 disabled={!inputPath || !outputPath || isRunning}
               >
-                Start Migration
+                Start Migration ({versionInfo.source} → {versionInfo.target})
               </button>
 
               <button
@@ -361,9 +407,10 @@ const App: React.FC = () => {
 
             <div className="info-panel">
               <h4>Migration Info</h4>
-              <p>This tool migrates Odoo backup files from version 16 to 17.</p>
+              <p>This tool migrates Odoo backup files between versions.</p>
               <ul>
-                <li>Select your Odoo 16 backup ZIP file</li>
+                <li>Select migration path (16→17 or 17→18)</li>
+                <li>Select your Odoo {versionInfo.source} backup ZIP file</li>
                 <li>Choose where to save the migrated backup</li>
                 <li>Ensure PostgreSQL is running and configured in Settings</li>
               </ul>
@@ -377,7 +424,7 @@ const App: React.FC = () => {
     <div className="app">
       <header className="app-header">
         <h1>Odoo ZIPConverter</h1>
-        <span className="version">v1.0.0</span>
+        <span className="version">v2.0.0</span>
       </header>
 
       <main className="app-content">
@@ -385,7 +432,7 @@ const App: React.FC = () => {
       </main>
 
       <footer className="app-footer">
-        <span>Odoo Backup Migration Tool (16 to 17)</span>
+        <span>Odoo Backup Migration Tool (16→17, 17→18)</span>
       </footer>
 
       <style>{`
@@ -508,6 +555,60 @@ const App: React.FC = () => {
         .info-panel li {
           margin: 4px 0;
           color: #666;
+        }
+
+        .version-selector {
+          background: white;
+          border-radius: 8px;
+          padding: 16px;
+          box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+
+        .version-selector h4 {
+          margin-bottom: 12px;
+          color: #714B67;
+        }
+
+        .version-options {
+          display: flex;
+          gap: 12px;
+        }
+
+        .version-option {
+          flex: 1;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          padding: 16px;
+          border: 2px solid #e0e0e0;
+          border-radius: 8px;
+          cursor: pointer;
+          transition: all 0.2s;
+        }
+
+        .version-option:hover {
+          border-color: #714B67;
+        }
+
+        .version-option.selected {
+          border-color: #714B67;
+          background: #f9f5f8;
+        }
+
+        .version-option input {
+          display: none;
+        }
+
+        .version-label {
+          font-weight: 600;
+          font-size: 16px;
+          color: #333;
+        }
+
+        .version-scripts {
+          font-size: 12px;
+          color: #666;
+          margin-top: 4px;
         }
 
         .result-view {
