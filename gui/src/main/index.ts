@@ -8,8 +8,20 @@ import * as path from 'path';
 import Store from 'electron-store';
 import { registerIpcHandlers } from './ipc-handlers';
 
+// Store schema type
+interface StoreSchema {
+  postgres: {
+    host: string;
+    port: number;
+    user: string;
+    password: string;
+  };
+  recentFiles: string[];
+  windowBounds: { width: number; height: number };
+}
+
 // Settings store with encryption for sensitive data
-const store = new Store({
+const store = new Store<StoreSchema>({
   name: 'odoo-zipconverter-settings',
   encryptionKey: 'odoo-zipconverter-v1',
   defaults: {
@@ -200,7 +212,7 @@ export function updateTrayStatus(status: 'idle' | 'running' | 'success' | 'error
 /**
  * Get the settings store for IPC handlers
  */
-export function getStore(): Store {
+export function getStore(): Store<StoreSchema> {
   return store;
 }
 

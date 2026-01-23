@@ -7,8 +7,8 @@ import { ipcMain, dialog, BrowserWindow } from 'electron';
 import * as path from 'path';
 import { getStore, getMainWindow, showNotification, updateTrayStatus } from './index';
 
-// Import migration engine from backend
-import { migrate, MigrationConfig as BackendMigrationConfig } from '../../../src/index';
+// Import migration engine from backend (compiled)
+import { migrate, MigrationConfig as BackendMigrationConfig } from '../../../dist/index';
 
 // Import types from the migration engine
 interface PostgresConfig {
