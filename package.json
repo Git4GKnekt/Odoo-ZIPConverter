@@ -1,0 +1,12 @@
+﻿{
+  "name": "odoo-zipconverter",
+  "version": "1.0.0",
+  "description": "Beskriv projektets syfte har",
+  "scripts": {
+    "dev": "echo Add dev script",
+    "build": "echo Add build script",
+    "test": "echo Add test script",
+    "lint": "echo Add lint script",
+    "typecheck": "echo Add typecheck script"
+  }
+}
