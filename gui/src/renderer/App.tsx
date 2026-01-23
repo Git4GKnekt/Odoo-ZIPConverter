@@ -94,6 +94,45 @@ const App: React.FC = () => {
   const [progress, setProgress] = useState<ProgressUpdate | null>(null);
   const [result, setResult] = useState<MigrationResult | null>(null);
 
+  // Validation state
+  const [postgresStatus, setPostgresStatus] = useState<{
+    checked: boolean;
+    valid: boolean;
+    message: string;
+  }>({ checked: false, valid: false, message: 'Not checked' });
+  const [isValidating, setIsValidating] = useState(false);
+
+  // Check if migration can start
+  const canStartMigration = inputPath && outputPath && postgresStatus.valid && !isRunning;
+  const getStartButtonMessage = (): string => {
+    if (!inputPath) return 'Select input file';
+    if (!outputPath) return 'Select output file';
+    if (!postgresStatus.checked) return 'Checking PostgreSQL...';
+    if (!postgresStatus.valid) return 'PostgreSQL not connected';
+    return 'Start Migration';
+  };
+
+  // Validate PostgreSQL connection
+  const validatePostgresConnection = useCallback(async () => {
+    setIsValidating(true);
+    try {
+      const result = await window.electronAPI.validatePostgres(postgresConfig);
+      setPostgresStatus({
+        checked: true,
+        valid: result.valid,
+        message: result.message
+      });
+    } catch (err) {
+      setPostgresStatus({
+        checked: true,
+        valid: false,
+        message: err instanceof Error ? err.message : 'Connection failed'
+      });
+    } finally {
+      setIsValidating(false);
+    }
+  }, [postgresConfig]);
+
   // Load settings on mount
   useEffect(() => {
     const loadInitialSettings = async () => {
@@ -108,6 +147,14 @@ const App: React.FC = () => {
 
     loadInitialSettings();
   }, []);
+
+  // Validate PostgreSQL when config changes
+  useEffect(() => {
+    if (postgresConfig.host && postgresConfig.user) {
+      setPostgresStatus({ checked: false, valid: false, message: 'Checking...' });
+      validatePostgresConnection();
+    }
+  }, [postgresConfig, validatePostgresConnection]);
 
   // Register event listeners
   useEffect(() => {
@@ -388,13 +435,36 @@ const App: React.FC = () => {
               onOutputChange={setOutputPath}
             />
 
+            <div className="status-panel">
+              <div className={`status-item ${postgresStatus.valid ? 'valid' : 'invalid'}`}>
+                <span className="status-icon">
+                  {isValidating ? '⏳' : postgresStatus.valid ? '✓' : '✗'}
+                </span>
+                <span className="status-label">PostgreSQL:</span>
+                <span className="status-message">
+                  {isValidating ? 'Checking connection...' : postgresStatus.message}
+                </span>
+                <button
+                  className="btn btn-small"
+                  onClick={validatePostgresConnection}
+                  disabled={isValidating}
+                >
+                  Test
+                </button>
+              </div>
+            </div>
+
             <div className="actions">
               <button
                 className="btn btn-primary btn-large"
                 onClick={handleStartMigration}
-                disabled={!inputPath || !outputPath || isRunning}
+                disabled={!canStartMigration}
+                title={!canStartMigration ? getStartButtonMessage() : ''}
               >
-                Start Migration ({versionInfo.source} → {versionInfo.target})
+                {canStartMigration
+                  ? `Start Migration (${versionInfo.source} → ${versionInfo.target})`
+                  : getStartButtonMessage()
+                }
               </button>
 
               <button
@@ -521,6 +591,48 @@ const App: React.FC = () => {
         .btn-large {
           padding: 14px 32px;
           font-size: 16px;
+        }
+
+        .btn-small {
+          padding: 4px 12px;
+          font-size: 12px;
+        }
+
+        .status-panel {
+          background: white;
+          border-radius: 8px;
+          padding: 12px 16px;
+          box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+
+        .status-item {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+        }
+
+        .status-item.valid .status-icon {
+          color: #28a745;
+        }
+
+        .status-item.invalid .status-icon {
+          color: #dc3545;
+        }
+
+        .status-icon {
+          font-size: 16px;
+          width: 20px;
+        }
+
+        .status-label {
+          font-weight: 600;
+          color: #333;
+        }
+
+        .status-message {
+          flex: 1;
+          color: #666;
+          font-size: 13px;
         }
 
         .main-view {

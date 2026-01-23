@@ -212,7 +212,31 @@ const Settings: React.FC<SettingsProps> = ({
         </div>
       </form>
 
-      {/* Info Panel */}
+      {/* Help Panel */}
+      <div className="settings-help">
+        <h4>Where to find your PostgreSQL credentials?</h4>
+        <div className="help-content">
+          <p><strong>Default values:</strong></p>
+          <ul>
+            <li><strong>Host:</strong> localhost (if PostgreSQL runs locally)</li>
+            <li><strong>Port:</strong> 5432 (standard PostgreSQL port)</li>
+            <li><strong>Username:</strong> postgres (default admin user)</li>
+            <li><strong>Password:</strong> Set during PostgreSQL installation</li>
+          </ul>
+
+          <p><strong>If you forgot your password:</strong></p>
+          <ul>
+            <li>Check pgAdmin if installed (right-click server → Properties)</li>
+            <li>Windows: Search "Services", find PostgreSQL, note the user</li>
+            <li>Reset via pg_hba.conf (change auth to "trust" temporarily)</li>
+          </ul>
+
+          <p><strong>Check if PostgreSQL is running:</strong></p>
+          <code>netstat -ano | findstr :5432</code>
+        </div>
+      </div>
+
+      {/* Requirements Panel */}
       <div className="settings-info">
         <h4>Requirements</h4>
         <ul>
@@ -385,6 +409,52 @@ const Settings: React.FC<SettingsProps> = ({
 
         .result-message {
           font-size: 13px;
+        }
+
+        .settings-help {
+          background: #f0f7ff;
+          border: 1px solid #b8d4f0;
+          border-radius: 6px;
+          padding: 16px;
+          margin-bottom: 16px;
+        }
+
+        .settings-help h4 {
+          margin-bottom: 12px;
+          font-size: 14px;
+          color: #1a5a96;
+        }
+
+        .help-content p {
+          margin: 12px 0 6px 0;
+          font-size: 13px;
+          color: #333;
+        }
+
+        .help-content p:first-child {
+          margin-top: 0;
+        }
+
+        .help-content ul {
+          margin: 0;
+          padding-left: 20px;
+        }
+
+        .help-content li {
+          font-size: 13px;
+          color: #555;
+          margin: 4px 0;
+        }
+
+        .help-content code {
+          display: inline-block;
+          background: #e8e8e8;
+          padding: 4px 8px;
+          border-radius: 4px;
+          font-family: 'Consolas', 'Courier New', monospace;
+          font-size: 12px;
+          color: #333;
+          margin-top: 4px;
         }
 
         .settings-info {
