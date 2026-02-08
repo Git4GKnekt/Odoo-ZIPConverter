@@ -238,8 +238,9 @@ async function validatePreMigration(
 
       const expectedPrefix = config.sourceVersion.split('.')[0] + '.';
       if (!currentVersion.startsWith(expectedPrefix)) {
-        result.warnings.push(
-          `Database version is ${currentVersion}, expected ${config.sourceVersion}. Migration may have unexpected results.`
+        throw new Error(
+          `Database version mismatch: database is ${currentVersion} but migration expects Odoo ${config.sourceVersion}. ` +
+          `Please select the correct migration path.`
         );
       }
     } else {
