@@ -12,6 +12,7 @@
 import { Pool } from 'pg';
 import { spawn } from 'child_process';
 import * as fs from 'fs';
+import * as path from 'path';
 import { v4 as uuidv4 } from 'uuid';
 import {
   DatabaseContext,
@@ -19,6 +20,32 @@ import {
   MigrationScript,
   PostgresConfig
 } from './types';
+
+/**
+ * Find a PostgreSQL binary (psql, pg_dump) by checking PATH and common install locations
+ */
+function findPgBinary(name: string): string {
+  if (process.platform !== 'win32') {
+    return name; // On Linux/macOS, rely on PATH
+  }
+
+  // Check common Windows PostgreSQL install paths
+  const pgBase = 'C:\\Program Files\\PostgreSQL';
+  if (fs.existsSync(pgBase)) {
+    const versions = fs.readdirSync(pgBase)
+      .filter(d => /^\d+$/.test(d))
+      .sort((a, b) => parseInt(b) - parseInt(a)); // newest first
+
+    for (const ver of versions) {
+      const binPath = path.join(pgBase, ver, 'bin', `${name}.exe`);
+      if (fs.existsSync(binPath)) {
+        return binPath;
+      }
+    }
+  }
+
+  return name; // Fall back to PATH
+}
 
 /**
  * Generate a unique temporary database name
@@ -111,7 +138,7 @@ export async function loadDumpFile(
   ];
 
   return new Promise((resolve, reject) => {
-    const psql = spawn('psql', psqlArgs, { env });
+    const psql = spawn(findPgBinary('psql'), psqlArgs, { env });
 
     let stderr = '';
 
@@ -224,7 +251,7 @@ export async function exportDatabase(
   ];
 
   return new Promise((resolve, reject) => {
-    const pgDump = spawn('pg_dump', pgDumpArgs, { env });
+    const pgDump = spawn(findPgBinary('pg_dump'), pgDumpArgs, { env });
 
     let stderr = '';
 
