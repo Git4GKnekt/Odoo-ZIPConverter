@@ -257,6 +257,77 @@ export function registerIpcHandlers(): void {
       return { valid: false, message };
     }
   });
+
+  // ==========================================
+  // System Check Handlers
+  // ==========================================
+
+  ipcMain.handle('system:check-postgres', async () => {
+    const { exec } = await import('child_process');
+    const { promisify } = await import('util');
+    const execAsync = promisify(exec);
+
+    const result = {
+      installed: false,
+      running: false,
+      port: 5432,
+      message: '',
+      installUrl: 'https://www.postgresql.org/download/windows/',
+      dockerCommand: 'docker run -d --name postgres -p 5432:5432 -e POSTGRES_PASSWORD=postgres postgres:16'
+    };
+
+    try {
+      // Check if PostgreSQL is running on port 5432
+      const { stdout } = await execAsync('netstat -ano | findstr :5432', { shell: 'cmd.exe' });
+      if (stdout && stdout.includes('LISTENING')) {
+        result.running = true;
+        result.installed = true;
+        result.message = 'PostgreSQL is running on port 5432';
+      }
+    } catch {
+      // Port not in use - PostgreSQL not running
+    }
+
+    if (!result.running) {
+      // Check if PostgreSQL is installed (check common paths)
+      try {
+        await execAsync('where psql', { shell: 'cmd.exe' });
+        result.installed = true;
+        result.message = 'PostgreSQL is installed but not running. Start the PostgreSQL service.';
+      } catch {
+        // psql not found in PATH
+      }
+
+      // Check Program Files
+      if (!result.installed) {
+        const fs = await import('fs');
+        const pgPaths = [
+          'C:\\Program Files\\PostgreSQL',
+          'C:\\Program Files (x86)\\PostgreSQL'
+        ];
+
+        for (const pgPath of pgPaths) {
+          if (fs.existsSync(pgPath)) {
+            result.installed = true;
+            result.message = 'PostgreSQL is installed but not running. Start the PostgreSQL service.';
+            break;
+          }
+        }
+      }
+
+      if (!result.installed) {
+        result.message = 'PostgreSQL is not installed. Install it to use this application.';
+      }
+    }
+
+    return result;
+  });
+
+  ipcMain.handle('system:open-url', async (_, url: string) => {
+    const { shell } = await import('electron');
+    await shell.openExternal(url);
+    return true;
+  });
 }
 
 /**
