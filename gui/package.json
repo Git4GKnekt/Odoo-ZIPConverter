@@ -4,7 +4,7 @@
   "description": "Desktop application for Odoo backup migration (16 to 17)",
   "main": "dist/main/index.js",
   "scripts": {
-    "dev": "concurrently \"npm run dev:main\" \"npm run dev:renderer\"",
+    "dev": "npm run build:main && concurrently -k \"npm run dev:renderer\" \"wait-on http://localhost:5173 && cross-env NODE_ENV=development electron .\"",
     "dev:main": "tsc -p tsconfig.main.json --watch",
     "dev:renderer": "vite",
     "build": "npm run build:main && npm run build:renderer",
@@ -17,9 +17,9 @@
     "package:linux": "electron-builder --linux"
   },
   "dependencies": {
+    "adm-zip": "^0.5.10",
     "electron-store": "^8.1.0",
-    "pg": "^8.11.3",
-    "adm-zip": "^0.5.10"
+    "pg": "^8.11.3"
   },
   "devDependencies": {
     "@types/adm-zip": "^0.5.5",
@@ -29,12 +29,14 @@
     "@types/react-dom": "^18.2.17",
     "@vitejs/plugin-react": "^4.2.1",
     "concurrently": "^8.2.2",
+    "cross-env": "^10.1.0",
     "electron": "^28.0.0",
     "electron-builder": "^24.9.1",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "typescript": "^5.3.2",
-    "vite": "^5.0.6"
+    "vite": "^5.0.6",
+    "wait-on": "^9.0.3"
   },
   "build": {
     "appId": "com.odoo.zipconverter",
@@ -50,20 +52,31 @@
       {
         "from": "../../../src",
         "to": "migration-engine",
-        "filter": ["**/*.ts", "**/*.js", "**/*.json"]
+        "filter": [
+          "**/*.ts",
+          "**/*.js",
+          "**/*.json"
+        ]
       }
     ],
     "win": {
-      "target": ["nsis"],
+      "target": [
+        "nsis"
+      ],
       "icon": "assets/icon.ico"
     },
     "mac": {
-      "target": ["dmg"],
+      "target": [
+        "dmg"
+      ],
       "icon": "assets/icon.icns",
       "category": "public.app-category.developer-tools"
     },
     "linux": {
-      "target": ["AppImage", "deb"],
+      "target": [
+        "AppImage",
+        "deb"
+      ],
       "icon": "assets/icon.png",
       "category": "Development"
     },

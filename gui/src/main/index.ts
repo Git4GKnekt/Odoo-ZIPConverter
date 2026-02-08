@@ -83,9 +83,9 @@ function createWindow(): void {
     }
   });
 
-  // Minimize to tray instead of closing
+  // Minimize to tray instead of closing (only if tray exists)
   mainWindow.on('close', (event) => {
-    if (!isQuitting) {
+    if (!isQuitting && tray) {
       event.preventDefault();
       mainWindow?.hide();
       showTrayNotification('Odoo ZIPConverter', 'Application minimized to system tray');
@@ -101,7 +101,12 @@ function createWindow(): void {
  * Create system tray with context menu
  */
 function createTray(): void {
-  const icon = nativeImage.createFromPath(getIconPath());
+  const iconPath = getIconPath();
+  const icon = nativeImage.createFromPath(iconPath);
+  if (icon.isEmpty()) {
+    console.warn('Tray icon not found at', iconPath, '- skipping tray creation');
+    return;
+  }
   tray = new Tray(icon.resize({ width: 16, height: 16 }));
 
   const contextMenu = Menu.buildFromTemplate([
