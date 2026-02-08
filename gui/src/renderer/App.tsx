@@ -638,8 +638,7 @@ const App: React.FC = () => {
         .app {
           display: flex;
           flex-direction: column;
-          height: 100vh;
-          overflow: hidden;
+          min-height: 100vh;
           font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
           background: #f5f5f5;
           color: #333;
@@ -668,8 +667,7 @@ const App: React.FC = () => {
         .app-content {
           flex: 1;
           padding: 24px;
-          overflow: hidden;
-          min-height: 0;
+          overflow-y: auto;
         }
 
         .app-footer {
@@ -859,19 +857,11 @@ const App: React.FC = () => {
         .main-view {
           display: flex;
           flex-direction: column;
-          height: 100%;
-          min-height: 0;
+          gap: 24px;
         }
 
         .main-view-scroll {
-          flex: 1;
-          overflow-y: auto;
-          display: flex;
-          flex-direction: column;
-          gap: 24px;
-          padding-right: 8px;
-          margin-right: -8px;
-          min-height: 0;
+          display: contents;
         }
 
         .main-view-scroll::-webkit-scrollbar {

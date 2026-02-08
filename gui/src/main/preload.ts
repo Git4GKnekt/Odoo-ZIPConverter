@@ -100,6 +100,24 @@ const electronAPI = {
   },
 
   // ==========================================
+  // System Checks
+  // ==========================================
+  checkPostgresInstalled: (): Promise<{
+    installed: boolean;
+    running: boolean;
+    port: number;
+    message: string;
+    installUrl: string;
+    dockerCommand: string;
+  }> => {
+    return ipcRenderer.invoke('system:check-postgres');
+  },
+
+  openExternalUrl: (url: string): Promise<boolean> => {
+    return ipcRenderer.invoke('system:open-url', url);
+  },
+
+  // ==========================================
   // Event Listeners
   // ==========================================
   onMigrationProgress: (callback: (update: {
