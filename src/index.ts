@@ -99,8 +99,9 @@ export async function migrate(config: MigrationConfig): Promise<MigrationResult>
       } else if (sourceVersion.startsWith('17.')) {
         migrationPath = '17-to-18';
       } else {
-        logger.warn('Could not auto-detect migration path, defaulting to 16-to-17');
-        migrationPath = '16-to-17';
+        throw new Error(
+          `Unsupported Odoo version: ${sourceVersion}. Only Odoo 16.x and 17.x backups are supported.`
+        );
       }
       logger.info('Auto-detected migration path', { path: migrationPath });
     }
@@ -108,7 +109,10 @@ export async function migrate(config: MigrationConfig): Promise<MigrationResult>
     const pathInfo = getMigrationPathInfo(migrationPath);
     const expectedPrefix = pathInfo.source.split('.')[0] + '.';
     if (!sourceVersion.startsWith(expectedPrefix)) {
-      logger.warn(`Source version ${sourceVersion} does not match expected ${pathInfo.source}, migration may have unexpected results`);
+      throw new Error(
+        `Version mismatch: backup is Odoo ${sourceVersion} but migration path expects Odoo ${pathInfo.source}. ` +
+        `Please select the correct migration path for your backup.`
+      );
     }
 
     // ===== PHASE 2: Database Setup =====
