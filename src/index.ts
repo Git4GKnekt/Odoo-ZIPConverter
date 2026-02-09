@@ -39,6 +39,7 @@ import {
 } from './database';
 import * as fs from 'fs';
 import { runMigration, getMigrationPathInfo, MigrationPath } from './migration';
+import { EmbeddedPostgres, resolvePostgresBinDir, cleanupOrphanedInstances } from './embedded-pg';
 
 /**
  * Create a simple console logger
@@ -81,10 +82,37 @@ export async function migrate(config: MigrationConfig): Promise<MigrationResult>
   let dbContext: DatabaseContext | null = null;
   let pool: Pool | null = null;
   let extractionContext: ExtractionContext | null = null;
+  let embeddedPg: EmbeddedPostgres | null = null;
 
   const emitProgress = config.onProgress || (() => {});
 
   try {
+    // ===== Embedded PostgreSQL Setup =====
+    if (config.useEmbeddedPostgres) {
+      emitProgress({ phase: 'database', progress: 2, message: 'Starting embedded PostgreSQL...' });
+      logger.info('Using embedded PostgreSQL');
+
+      // Clean up any orphaned instances from previous crashes
+      cleanupOrphanedInstances(logger);
+
+      const binDir = resolvePostgresBinDir();
+      logger.info('PostgreSQL binaries found', { binDir });
+
+      embeddedPg = new EmbeddedPostgres({
+        binDir,
+        logger
+      });
+
+      await embeddedPg.init();
+      await embeddedPg.start();
+
+      // Override postgres config with embedded instance
+      config = { ...config, postgresConfig: embeddedPg.getConfig() };
+      logger.info('Embedded PostgreSQL ready', {
+        port: config.postgresConfig.port
+      });
+    }
+
     // ===== PHASE 1: Extraction =====
     const phase1Start = Date.now();
     logger.info('--- Phase 1: Extraction ---');
@@ -296,6 +324,11 @@ export async function migrate(config: MigrationConfig): Promise<MigrationResult>
       cleanupTempDirectory(tempDir, logger);
     } else if (tempDir && config.keepTemp) {
       logger.info('Keeping temp directory for debugging', { path: tempDir });
+    }
+
+    // Stop embedded PostgreSQL
+    if (embeddedPg) {
+      await embeddedPg.cleanup();
     }
 
     logger.info('Cleanup complete');

@@ -7,7 +7,6 @@ import React, { useState, useEffect, useCallback } from 'react';
 import FileSelector from './components/FileSelector';
 import MigrationProgress from './components/MigrationProgress';
 import MigrationReportView from './components/MigrationReport';
-import Settings from './components/Settings';
 
 // Get the Electron API from preload
 declare global {
@@ -107,7 +106,7 @@ interface ProgressUpdate {
   details?: Record<string, unknown>;
 }
 
-type AppView = 'main' | 'settings' | 'progress' | 'result';
+type AppView = 'main' | 'progress' | 'result';
 
 const App: React.FC = () => {
   // Application state
@@ -115,12 +114,13 @@ const App: React.FC = () => {
   const [inputPath, setInputPath] = useState<string>('');
   const [outputPath, setOutputPath] = useState<string>('');
   const [migrationPath, setMigrationPath] = useState<MigrationPath>('16-to-17');
-  const [postgresConfig, setPostgresConfig] = useState<PostgresConfig>({
+  // Default PG config — embedded PostgreSQL overrides this at runtime
+  const postgresConfig: PostgresConfig = {
     host: 'localhost',
     port: 5432,
     user: 'postgres',
-    password: ''
-  });
+    password: 'postgres'
+  };
   const [recentFiles, setRecentFiles] = useState<string[]>([]);
 
   // Migration state
@@ -128,100 +128,21 @@ const App: React.FC = () => {
   const [progress, setProgress] = useState<ProgressUpdate | null>(null);
   const [result, setResult] = useState<MigrationResult | null>(null);
 
-  // Validation state
-  const [postgresStatus, setPostgresStatus] = useState<{
-    checked: boolean;
-    valid: boolean;
-    message: string;
-  }>({ checked: false, valid: false, message: 'Not checked' });
-  const [isValidating, setIsValidating] = useState(false);
 
-  // System status
-  const [systemStatus, setSystemStatus] = useState<{
-    checked: boolean;
-    postgresInstalled: boolean;
-    postgresRunning: boolean;
-    message: string;
-    installUrl: string;
-    dockerCommand: string;
-  }>({
-    checked: false,
-    postgresInstalled: false,
-    postgresRunning: false,
-    message: 'Checking system...',
-    installUrl: '',
-    dockerCommand: ''
-  });
-  const [showSystemWarning, setShowSystemWarning] = useState(false);
-
-  // Check if migration can start
-  const canStartMigration = inputPath && outputPath && postgresStatus.valid && !isRunning;
+  // Check if migration can start — PostgreSQL is built-in, no validation needed
+  const canStartMigration = inputPath && outputPath && !isRunning;
   const getStartButtonMessage = (): string => {
     if (!inputPath) return 'Select input file';
     if (!outputPath) return 'Select output file';
-    if (!postgresStatus.checked) return 'Checking PostgreSQL...';
-    if (!postgresStatus.valid) return 'PostgreSQL not connected';
     return 'Start Migration';
   };
 
-  // Validate PostgreSQL connection
-  const validatePostgresConnection = useCallback(async () => {
-    setIsValidating(true);
-    try {
-      const result = await window.electronAPI.validatePostgres(postgresConfig);
-      setPostgresStatus({
-        checked: true,
-        valid: result.valid,
-        message: result.message
-      });
-    } catch (err) {
-      setPostgresStatus({
-        checked: true,
-        valid: false,
-        message: err instanceof Error ? err.message : 'Connection failed'
-      });
-    } finally {
-      setIsValidating(false);
-    }
-  }, [postgresConfig]);
 
-  // Check system requirements on mount
-  useEffect(() => {
-    const checkSystem = async () => {
-      try {
-        const status = await window.electronAPI.checkPostgresInstalled();
-        setSystemStatus({
-          checked: true,
-          postgresInstalled: status.installed,
-          postgresRunning: status.running,
-          message: status.message,
-          installUrl: status.installUrl,
-          dockerCommand: status.dockerCommand
-        });
-
-        // Show warning if PostgreSQL is not running
-        if (!status.running) {
-          setShowSystemWarning(true);
-        }
-      } catch (err) {
-        console.error('Failed to check system:', err);
-        setSystemStatus(prev => ({
-          ...prev,
-          checked: true,
-          message: 'Could not check system status'
-        }));
-      }
-    };
-
-    checkSystem();
-  }, []);
-
-  // Load settings on mount
+  // Load recent files on mount
   useEffect(() => {
     const loadInitialSettings = async () => {
       try {
         const settings = await window.electronAPI.loadSettings();
-        setPostgresConfig(settings.postgres);
         setRecentFiles(settings.recentFiles || []);
       } catch (err) {
         console.error('Failed to load settings:', err);
@@ -230,14 +151,6 @@ const App: React.FC = () => {
 
     loadInitialSettings();
   }, []);
-
-  // Validate PostgreSQL when config changes
-  useEffect(() => {
-    if (postgresConfig.host && postgresConfig.user) {
-      setPostgresStatus({ checked: false, valid: false, message: 'Checking...' });
-      validatePostgresConnection();
-    }
-  }, [postgresConfig, validatePostgresConnection]);
 
   // Register event listeners
   useEffect(() => {
@@ -250,7 +163,7 @@ const App: React.FC = () => {
     });
 
     const unsubTraySettings = window.electronAPI.onTrayOpenSettings(() => {
-      setView('settings');
+      setView('main');
     });
 
     return () => {
@@ -364,13 +277,6 @@ const App: React.FC = () => {
     setView('main');
   }, []);
 
-  // Save settings
-  const handleSaveSettings = useCallback(async (newConfig: PostgresConfig) => {
-    setPostgresConfig(newConfig);
-    await window.electronAPI.saveSettings({ postgres: newConfig });
-    setView('main');
-  }, []);
-
   // Reset to main view
   const handleBackToMain = useCallback(() => {
     setView('main');
@@ -378,24 +284,9 @@ const App: React.FC = () => {
     setResult(null);
   }, []);
 
-  // Validate PostgreSQL connection
-  const handleValidatePostgres = useCallback(async (): Promise<{ valid: boolean; message: string }> => {
-    return window.electronAPI.validatePostgres(postgresConfig);
-  }, [postgresConfig]);
-
   // Render current view
   const renderView = () => {
     switch (view) {
-      case 'settings':
-        return (
-          <Settings
-            config={postgresConfig}
-            onSave={handleSaveSettings}
-            onCancel={() => setView('main')}
-            onValidate={handleValidatePostgres}
-          />
-        );
-
       case 'progress':
         return (
           <MigrationProgress
@@ -527,69 +418,6 @@ const App: React.FC = () => {
               </div>
             </div>
 
-            {/* System Warning Banner */}
-            {showSystemWarning && !systemStatus.postgresRunning && (
-              <div className="system-warning">
-                <div className="warning-header">
-                  <span className="warning-icon">⚠️</span>
-                  <strong>PostgreSQL {systemStatus.postgresInstalled ? 'is not running' : 'is not installed'}</strong>
-                  <button
-                    className="warning-close"
-                    onClick={() => setShowSystemWarning(false)}
-                    title="Dismiss"
-                  >
-                    ×
-                  </button>
-                </div>
-                <p className="warning-message">{systemStatus.message}</p>
-
-                {!systemStatus.postgresInstalled && (
-                  <div className="warning-actions">
-                    <p><strong>Install PostgreSQL:</strong></p>
-                    <button
-                      className="btn btn-warning"
-                      onClick={() => window.electronAPI.openExternalUrl(systemStatus.installUrl)}
-                    >
-                      Download PostgreSQL
-                    </button>
-                    <p className="warning-alt">Or use Docker:</p>
-                    <code className="docker-command">{systemStatus.dockerCommand}</code>
-                  </div>
-                )}
-
-                {systemStatus.postgresInstalled && !systemStatus.postgresRunning && (
-                  <div className="warning-actions">
-                    <p><strong>Start PostgreSQL service:</strong></p>
-                    <ol>
-                      <li>Press <code>Win + R</code>, type <code>services.msc</code>, press Enter</li>
-                      <li>Find "postgresql" in the list</li>
-                      <li>Right-click → <strong>Start</strong></li>
-                    </ol>
-                    <button
-                      className="btn btn-warning"
-                      onClick={async () => {
-                        const status = await window.electronAPI.checkPostgresInstalled();
-                        setSystemStatus({
-                          checked: true,
-                          postgresInstalled: status.installed,
-                          postgresRunning: status.running,
-                          message: status.message,
-                          installUrl: status.installUrl,
-                          dockerCommand: status.dockerCommand
-                        });
-                        if (status.running) {
-                          setShowSystemWarning(false);
-                          validatePostgresConnection();
-                        }
-                      }}
-                    >
-                      Check Again
-                    </button>
-                  </div>
-                )}
-              </div>
-            )}
-
             <FileSelector
               inputPath={inputPath}
               outputPath={outputPath}
@@ -600,25 +428,6 @@ const App: React.FC = () => {
               onInputChange={setInputPath}
               onOutputChange={setOutputPath}
             />
-
-            <div className="status-panel">
-              <div className={`status-item ${postgresStatus.valid ? 'valid' : 'invalid'}`}>
-                <span className="status-icon">
-                  {isValidating ? '⏳' : postgresStatus.valid ? '✓' : '✗'}
-                </span>
-                <span className="status-label">PostgreSQL:</span>
-                <span className="status-message">
-                  {isValidating ? 'Checking connection...' : postgresStatus.message}
-                </span>
-                <button
-                  className="btn btn-small"
-                  onClick={validatePostgresConnection}
-                  disabled={isValidating}
-                >
-                  Test
-                </button>
-              </div>
-            </div>
 
             <div className="actions">
               <button
@@ -633,22 +442,16 @@ const App: React.FC = () => {
                 }
               </button>
 
-              <button
-                className="btn btn-secondary"
-                onClick={() => setView('settings')}
-              >
-                Settings
-              </button>
             </div>
 
             <div className="info-panel">
               <h4>Migration Info</h4>
-              <p>This tool migrates Odoo backup files between versions.</p>
+              <p>This tool migrates Odoo backup files between versions. PostgreSQL is built-in — no installation required.</p>
               <ul>
                 <li>Select migration path (16→17 or 17→18)</li>
                 <li>Select your Odoo {versionInfo.source} backup ZIP file</li>
                 <li>Choose where to save the migrated backup</li>
-                <li>Ensure PostgreSQL is running and configured in Settings</li>
+                <li>Click Start — the database starts and stops automatically</li>
               </ul>
             </div>
             </div>{/* End main-view-scroll */}
@@ -661,7 +464,7 @@ const App: React.FC = () => {
     <div className="app">
       <header className="app-header">
         <h1>Odoo ZIPConverter</h1>
-        <span className="version">v2.1.0-{__BUILD_HASH__} ({__BUILD_TIME__})</span>
+        <span className="version">v2.2.0-{__BUILD_HASH__} ({__BUILD_TIME__})</span>
       </header>
 
       <main className="app-content">

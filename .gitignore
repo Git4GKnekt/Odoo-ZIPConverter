@@ -22,6 +22,7 @@ build/
 *.log
 *.tsbuildinfo
 gui/release/
+gui/postgres/
 
 # Compiled output (should be in dist/)
 src/**/*.js

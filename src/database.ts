@@ -25,7 +25,17 @@ import {
 /**
  * Find a PostgreSQL binary (psql, pg_dump) by checking PATH and common install locations
  */
-function findPgBinary(name: string): string {
+function findPgBinary(name: string, binDir?: string): string {
+  // If a specific bin directory is provided (embedded mode), use it
+  if (binDir) {
+    const ext = process.platform === 'win32' ? '.exe' : '';
+    const binPath = path.join(binDir, `${name}${ext}`);
+    if (fs.existsSync(binPath)) {
+      return binPath;
+    }
+    throw new Error(`PostgreSQL binary not found: ${binPath}`);
+  }
+
   if (process.platform !== 'win32') {
     return name; // On Linux/macOS, rely on PATH
   }
@@ -146,7 +156,7 @@ export async function loadDumpFile(
     '-q' // Quiet mode — no ON_ERROR_STOP, Odoo dumps may have harmless duplicate constraints
   ];
 
-  const psqlPath = findPgBinary('psql');
+  const psqlPath = findPgBinary('psql', config.binDir);
   logger.info('Using psql binary', { path: psqlPath });
 
   await new Promise<void>((resolve, reject) => {
@@ -342,7 +352,7 @@ export async function exportDatabase(
     '--format=plain'
   ];
 
-  const pgDumpPath = findPgBinary('pg_dump');
+  const pgDumpPath = findPgBinary('pg_dump', config.binDir);
   logger.info('Using pg_dump binary', { path: pgDumpPath });
 
   return new Promise((resolve, reject) => {
