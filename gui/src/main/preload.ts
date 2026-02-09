@@ -82,6 +82,26 @@ const electronAPI = {
     errors: Array<{ phase: string; message: string; recoverable: boolean }>;
     warnings: string[];
     duration: number;
+    report?: {
+      phaseTimings: { extraction: number; database: number; migration: number; export: number };
+      scriptResults: Array<{
+        id: string;
+        name: string;
+        description: string;
+        status: 'applied' | 'skipped' | 'failed';
+        durationMs: number;
+        error?: string;
+      }>;
+      stats: {
+        tableCount: number;
+        moduleCount: number;
+        installedModuleCount: number;
+        partnerCount: number;
+        userCount: number;
+      };
+      importWarnings: string[];
+      reportFilePath?: string;
+    };
   }> => {
     return ipcRenderer.invoke('migration:start', config);
   },

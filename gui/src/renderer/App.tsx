@@ -6,6 +6,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import FileSelector from './components/FileSelector';
 import MigrationProgress from './components/MigrationProgress';
+import MigrationReportView from './components/MigrationReport';
 import Settings from './components/Settings';
 
 // Get the Electron API from preload
@@ -64,6 +65,29 @@ interface MigrationConfig {
   verbose?: boolean;
 }
 
+interface ScriptResult {
+  id: string;
+  name: string;
+  description: string;
+  status: 'applied' | 'skipped' | 'failed';
+  durationMs: number;
+  error?: string;
+}
+
+interface MigrationReportData {
+  phaseTimings: { extraction: number; database: number; migration: number; export: number };
+  scriptResults: ScriptResult[];
+  stats: {
+    tableCount: number;
+    moduleCount: number;
+    installedModuleCount: number;
+    partnerCount: number;
+    userCount: number;
+  };
+  importWarnings: string[];
+  reportFilePath?: string;
+}
+
 interface MigrationResult {
   success: boolean;
   sourceVersion: string;
@@ -72,6 +96,7 @@ interface MigrationResult {
   errors: Array<{ phase: string; message: string; recoverable: boolean }>;
   warnings: string[];
   duration: number;
+  report?: MigrationReportData;
 }
 
 interface ProgressUpdate {
@@ -410,6 +435,18 @@ const App: React.FC = () => {
                     </ul>
                   </div>
                 )}
+
+                {/* Detailed Migration Report */}
+                {result.report && (
+                  <MigrationReportView
+                    report={result.report}
+                    totalDuration={result.duration}
+                    onOpenReport={result.report.reportFilePath ? () => {
+                      window.electronAPI.openExternalUrl(result.report!.reportFilePath!);
+                    } : undefined}
+                  />
+                )}
+
                 <p className="output-path">
                   <strong>Output:</strong> {outputPath}
                 </p>
@@ -426,6 +463,13 @@ const App: React.FC = () => {
                     </li>
                   ))}
                 </ul>
+                {/* Show partial report on failure too */}
+                {result?.report && (
+                  <MigrationReportView
+                    report={result.report}
+                    totalDuration={result?.duration || 0}
+                  />
+                )}
               </div>
             )}
 

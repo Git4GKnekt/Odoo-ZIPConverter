@@ -56,6 +56,39 @@ export interface MigrationResult {
   errors: MigrationError[];
   warnings: string[];
   duration: number;
+  report?: MigrationReport;
+}
+
+export interface ScriptResult {
+  id: string;
+  name: string;
+  description: string;
+  status: 'applied' | 'skipped' | 'failed';
+  durationMs: number;
+  error?: string;
+}
+
+export interface PhaseTiming {
+  extraction: number;
+  database: number;
+  migration: number;
+  export: number;
+}
+
+export interface PostMigrationStats {
+  tableCount: number;
+  moduleCount: number;
+  installedModuleCount: number;
+  partnerCount: number;
+  userCount: number;
+}
+
+export interface MigrationReport {
+  phaseTimings: PhaseTiming;
+  scriptResults: ScriptResult[];
+  stats: PostMigrationStats;
+  importWarnings: string[];
+  reportFilePath?: string;
 }
 
 export interface MigrationError {
