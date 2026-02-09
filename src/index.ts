@@ -310,6 +310,7 @@ function generateTextReport(result: MigrationResult, pathInfo: VersionPair): str
   const fmt = (ms: number) => `${(ms / 1000).toFixed(1)}s`;
 
   lines.push('=== Odoo Migration Report ===');
+  lines.push('Odoo Backup Migration Tool by Arbore, Sweden — https://www.arbore.se');
   lines.push(`Date: ${new Date().toISOString().slice(0, 16).replace('T', ' ')}`);
   lines.push(`Source: ${pathInfo.source} → Target: ${pathInfo.target}`);
   lines.push(`Status: ${result.success ? 'Success' : 'Failed'}`);

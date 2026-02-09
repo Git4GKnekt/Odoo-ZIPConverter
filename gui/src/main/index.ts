@@ -3,7 +3,7 @@
  * Odoo ZIPConverter Desktop Application
  */
 
-import { app, BrowserWindow, Tray, Menu, nativeImage, Notification } from 'electron';
+import { app, BrowserWindow, Tray, Menu, nativeImage, Notification, shell } from 'electron';
 import * as path from 'path';
 import { execSync } from 'child_process';
 import Store from 'electron-store';
@@ -238,8 +238,48 @@ export function getMainWindow(): BrowserWindow | null {
   return mainWindow;
 }
 
+/**
+ * Create application menu with Help items
+ */
+function createAppMenu(): void {
+  const projectRoot = path.resolve(__dirname, '../../..');
+
+  const template: Electron.MenuItemConstructorOptions[] = [
+    { role: 'fileMenu' },
+    { role: 'editMenu' },
+    { role: 'viewMenu' },
+    { role: 'windowMenu' },
+    {
+      role: 'help',
+      submenu: [
+        {
+          label: 'README',
+          click: () => shell.openPath(path.join(projectRoot, 'README.md'))
+        },
+        {
+          label: 'Quick Start Guide',
+          click: () => shell.openPath(path.join(projectRoot, 'Quickstart.md'))
+        },
+        { type: 'separator' },
+        {
+          label: 'Arbore Website',
+          click: () => shell.openExternal('https://www.arbore.se')
+        },
+        {
+          label: 'GitHub Repository',
+          click: () => shell.openExternal('https://github.com/Git4GKnekt/Odoo-ZIPConverter')
+        }
+      ]
+    }
+  ];
+
+  const menu = Menu.buildFromTemplate(template);
+  Menu.setApplicationMenu(menu);
+}
+
 // App lifecycle events
 app.whenReady().then(() => {
+  createAppMenu();
   createWindow();
   createTray();
   registerIpcHandlers();
