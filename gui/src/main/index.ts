@@ -5,8 +5,18 @@
 
 import { app, BrowserWindow, Tray, Menu, nativeImage, Notification } from 'electron';
 import * as path from 'path';
+import { execSync } from 'child_process';
 import Store from 'electron-store';
 import { registerIpcHandlers } from './ipc-handlers';
+
+function getBuildInfo(): string {
+  try {
+    const hash = execSync('git rev-parse --short HEAD', { encoding: 'utf8' }).trim();
+    return `git:${hash} built:${new Date().toISOString().slice(0, 16)}`;
+  } catch {
+    return `built:${new Date().toISOString().slice(0, 16)}`;
+  }
+}
 
 // Store schema type
 interface StoreSchema {
@@ -51,7 +61,7 @@ function createWindow(): void {
     height: bounds.height,
     minWidth: 600,
     minHeight: 500,
-    title: 'Odoo ZIPConverter',
+    title: `Odoo ZIPConverter [${getBuildInfo()}]`,
     icon: getIconPath(),
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),

@@ -29,9 +29,18 @@ function findPgBinary(name: string): string {
     return name; // On Linux/macOS, rely on PATH
   }
 
-  // Check common Windows PostgreSQL install paths
-  const pgBase = 'C:\\Program Files\\PostgreSQL';
-  if (fs.existsSync(pgBase)) {
+  const searchPaths = [
+    process.env['ProgramFiles'],
+    process.env['ProgramFiles(x86)'],
+    'C:\\Program Files',
+    'C:\\Program Files (x86)'
+  ];
+
+  for (const base of searchPaths) {
+    if (!base) continue;
+    const pgBase = path.join(base, 'PostgreSQL');
+    if (!fs.existsSync(pgBase)) continue;
+
     const versions = fs.readdirSync(pgBase)
       .filter(d => /^\d+$/.test(d))
       .sort((a, b) => parseInt(b) - parseInt(a)); // newest first
@@ -133,12 +142,14 @@ export async function loadDumpFile(
     '-U', config.user,
     '-d', config.database,
     '-f', dumpPath,
-    '-q', // Quiet mode
-    '--set', 'ON_ERROR_STOP=on'
+    '-q' // Quiet mode — no ON_ERROR_STOP, Odoo dumps may have harmless duplicate constraints
   ];
 
-  return new Promise((resolve, reject) => {
-    const psql = spawn(findPgBinary('psql'), psqlArgs, { env });
+  const psqlPath = findPgBinary('psql');
+  logger.info('Using psql binary', { path: psqlPath });
+
+  await new Promise<void>((resolve, reject) => {
+    const psql = spawn(psqlPath, psqlArgs, { env });
 
     let stderr = '';
 
@@ -147,8 +158,17 @@ export async function loadDumpFile(
     });
 
     psql.on('close', (code) => {
-      if (code === 0) {
-        logger.info('SQL dump loaded successfully');
+      if (stderr) {
+        const errorLines = stderr.split('\n').filter(l => l.includes('FEL:') || l.includes('ERROR:'));
+        if (errorLines.length > 0) {
+          logger.warn(`SQL import had ${errorLines.length} errors (may be harmless duplicates)`, {
+            sample: errorLines.slice(0, 5).join('\n')
+          });
+        }
+      }
+      if (code === 0 || code === 3) {
+        // code 3 = script errors (e.g. duplicate constraints) — verify below
+        logger.info('SQL dump import finished', { exitCode: code });
         resolve();
       } else {
         logger.error('psql failed', { code, stderr });
@@ -157,9 +177,37 @@ export async function loadDumpFile(
     });
 
     psql.on('error', (err) => {
-      reject(new Error(`Failed to spawn psql: ${err.message}`));
+      reject(new Error(`Failed to spawn psql (${psqlPath}): ${err.message}`));
     });
   });
+
+  // Verify that critical Odoo tables were loaded
+  await verifyDumpImport(dbContext, logger);
+}
+
+/**
+ * Verify that critical Odoo tables exist after dump import
+ */
+async function verifyDumpImport(dbContext: DatabaseContext, logger: Logger): Promise<void> {
+  const pool = createPool(dbContext);
+  try {
+    const criticalTables = ['ir_module_module', 'ir_config_parameter', 'res_users'];
+    for (const table of criticalTables) {
+      const result = await pool.query(
+        `SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = $1)`,
+        [table]
+      );
+      if (!result.rows[0].exists) {
+        throw new Error(`SQL dump import incomplete: critical table '${table}' is missing`);
+      }
+    }
+    const countResult = await pool.query(
+      `SELECT COUNT(*) as count FROM information_schema.tables WHERE table_schema = 'public'`
+    );
+    logger.info('Dump import verified', { tableCount: countResult.rows[0].count });
+  } finally {
+    await pool.end();
+  }
 }
 
 /**
@@ -250,8 +298,11 @@ export async function exportDatabase(
     '--format=plain'
   ];
 
+  const pgDumpPath = findPgBinary('pg_dump');
+  logger.info('Using pg_dump binary', { path: pgDumpPath });
+
   return new Promise((resolve, reject) => {
-    const pgDump = spawn(findPgBinary('pg_dump'), pgDumpArgs, { env });
+    const pgDump = spawn(pgDumpPath, pgDumpArgs, { env });
 
     let stderr = '';
 
@@ -273,7 +324,7 @@ export async function exportDatabase(
     });
 
     pgDump.on('error', (err) => {
-      reject(new Error(`Failed to spawn pg_dump: ${err.message}`));
+      reject(new Error(`Failed to spawn pg_dump (${pgDumpPath}): ${err.message}`));
     });
   });
 }

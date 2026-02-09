@@ -9,6 +9,7 @@ import { getStore, getMainWindow, showNotification, updateTrayStatus } from './i
 
 // Import migration engine from backend (compiled)
 import { migrate, MigrationConfig as BackendMigrationConfig } from '../../../dist/index';
+console.log('[DEBUG] Migration engine loaded from:', require.resolve('../../../dist/index'));
 
 // Import types from the migration engine
 interface PostgresConfig {

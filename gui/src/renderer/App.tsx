@@ -617,7 +617,7 @@ const App: React.FC = () => {
     <div className="app">
       <header className="app-header">
         <h1>Odoo ZIPConverter</h1>
-        <span className="version">v2.0.0</span>
+        <span className="version">v2.1.0-{__BUILD_HASH__} ({__BUILD_TIME__})</span>
       </header>
 
       <main className="app-content">
