@@ -242,7 +242,17 @@ export function getMainWindow(): BrowserWindow | null {
  * Create application menu with Help items
  */
 function createAppMenu(): void {
-  const projectRoot = path.resolve(__dirname, '../../..');
+  const ghBase = 'https://github.com/Git4GKnekt/Odoo-ZIPConverter';
+
+  // In dev, open local files; in production, open GitHub
+  const openDoc = (filename: string) => {
+    if (app.isPackaged) {
+      shell.openExternal(`${ghBase}/blob/master/${filename}`);
+    } else {
+      const projectRoot = path.resolve(__dirname, '../../..');
+      shell.openPath(path.join(projectRoot, filename));
+    }
+  };
 
   const template: Electron.MenuItemConstructorOptions[] = [
     { role: 'fileMenu' },
@@ -254,11 +264,11 @@ function createAppMenu(): void {
       submenu: [
         {
           label: 'README',
-          click: () => shell.openPath(path.join(projectRoot, 'README.md'))
+          click: () => openDoc('README.md')
         },
         {
           label: 'Quick Start Guide',
-          click: () => shell.openPath(path.join(projectRoot, 'Quickstart.md'))
+          click: () => openDoc('Quickstart.md')
         },
         { type: 'separator' },
         {
@@ -267,7 +277,7 @@ function createAppMenu(): void {
         },
         {
           label: 'GitHub Repository',
-          click: () => shell.openExternal('https://github.com/Git4GKnekt/Odoo-ZIPConverter')
+          click: () => shell.openExternal(ghBase)
         }
       ]
     }

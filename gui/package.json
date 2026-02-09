@@ -1,16 +1,18 @@
 {
   "name": "odoo-zipconverter-desktop",
-  "version": "1.0.0",
-  "description": "Desktop application for Odoo backup migration (16 to 17)",
+  "version": "2.1.0",
+  "description": "Desktop application for Odoo backup migration (16→17, 17→18)",
   "main": "dist/main/index.js",
   "scripts": {
-    "dev": "npm run build:main && concurrently -k \"npm run dev:renderer\" \"wait-on http://localhost:5173 && cross-env NODE_ENV=development electron .\"",
+    "dev": "node scripts/prepare-backend.js && npm run build:main && concurrently -k \"npm run dev:renderer\" \"wait-on http://localhost:5173 && cross-env NODE_ENV=development electron .\"",
     "dev:main": "tsc -p tsconfig.main.json --watch",
     "dev:renderer": "vite",
     "build": "npm run build:main && npm run build:renderer",
     "build:main": "tsc -p tsconfig.main.json",
     "build:renderer": "vite build",
     "start": "electron .",
+    "prepare-backend": "node scripts/prepare-backend.js",
+    "build:package": "npm run build && node scripts/prepare-backend.js && electron-builder --win",
     "package": "electron-builder",
     "package:win": "electron-builder --win",
     "package:mac": "electron-builder --mac",
@@ -39,7 +41,7 @@
     "wait-on": "^9.0.3"
   },
   "build": {
-    "appId": "com.odoo.zipconverter",
+    "appId": "se.arbore.odoo-zipconverter",
     "productName": "Odoo ZIPConverter",
     "directories": {
       "output": "release"
@@ -50,33 +52,21 @@
     ],
     "extraResources": [
       {
-        "from": "../../../src",
-        "to": "migration-engine",
-        "filter": [
-          "**/*.ts",
-          "**/*.js",
-          "**/*.json"
-        ]
+        "from": "assets",
+        "to": "assets"
       }
     ],
     "win": {
-      "target": [
-        "nsis"
-      ],
-      "icon": "assets/icon.ico"
+      "target": ["nsis"],
+      "icon": "assets/icon.png"
     },
     "mac": {
-      "target": [
-        "dmg"
-      ],
-      "icon": "assets/icon.icns",
+      "target": ["dmg"],
+      "icon": "assets/icon.png",
       "category": "public.app-category.developer-tools"
     },
     "linux": {
-      "target": [
-        "AppImage",
-        "deb"
-      ],
+      "target": ["AppImage", "deb"],
       "icon": "assets/icon.png",
       "category": "Development"
     },
@@ -85,6 +75,6 @@
       "allowToChangeInstallationDirectory": true
     }
   },
-  "author": "Odoo ZIPConverter Team",
+  "author": "Arbore, Sweden",
   "license": "MIT"
 }

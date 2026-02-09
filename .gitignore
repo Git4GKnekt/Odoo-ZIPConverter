@@ -21,6 +21,7 @@ dist/
 build/
 *.log
 *.tsbuildinfo
+gui/release/
 
 # Compiled output (should be in dist/)
 src/**/*.js

@@ -8,8 +8,8 @@ import * as path from 'path';
 import { getStore, getMainWindow, showNotification, updateTrayStatus } from './index';
 
 // Import migration engine from backend (compiled)
-import { migrate, MigrationConfig as BackendMigrationConfig } from '../../../dist/index';
-console.log('[DEBUG] Migration engine loaded from:', require.resolve('../../../dist/index'));
+// In dev/production: backend is copied to gui/dist/backend/ before build
+import { migrate, MigrationConfig as BackendMigrationConfig } from '../backend/index';
 
 // Import types from the migration engine
 interface PostgresConfig {
