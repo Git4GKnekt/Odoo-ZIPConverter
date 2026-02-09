@@ -10,6 +10,8 @@ export interface PostgresConfig {
   password: string;
   /** Base database for admin operations (default: postgres) */
   adminDatabase?: string;
+  /** Path to PostgreSQL bin directory (for embedded mode) */
+  binDir?: string;
 }
 
 /** Supported migration paths */
@@ -25,6 +27,8 @@ export interface MigrationConfig {
   inputPath: string;
   outputPath: string;
   postgresConfig: PostgresConfig;
+  /** Use embedded PostgreSQL instead of external server */
+  useEmbeddedPostgres?: boolean;
   /** Migration path to use (auto-detected if not specified) */
   migrationPath?: MigrationPath;
   /** Keep temp files after completion (for debugging) */
