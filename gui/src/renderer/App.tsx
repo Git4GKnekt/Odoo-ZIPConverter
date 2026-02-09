@@ -669,7 +669,7 @@ const App: React.FC = () => {
       </main>
 
       <footer className="app-footer">
-        <span>Odoo Backup Migration Tool (16→17, 17→18)</span>
+        <span>Odoo Backup Migration Tool (16→17, 17→18) by <a href="#" onClick={(e) => { e.preventDefault(); window.electronAPI.openExternalUrl('https://www.arbore.se'); }}>Arbore, Sweden</a></span>
       </footer>
 
       <style>{`
@@ -721,6 +721,16 @@ const App: React.FC = () => {
           font-size: 12px;
           color: #666;
           text-align: center;
+        }
+
+        .app-footer a {
+          color: #714B67;
+          text-decoration: none;
+          font-weight: 500;
+        }
+
+        .app-footer a:hover {
+          text-decoration: underline;
         }
 
         .btn {

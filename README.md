@@ -1,45 +1,70 @@
 # Odoo-ZIPConverter
 
-> Migreringsverktyg för Odoo backup-ZIPs med stöd för 16→17 och 17→18
+> Migreringsverktyg for Odoo backup-ZIPs med stod for 16→17 och 17→18
+> Utvecklat av [Arbore, Sweden](https://www.arbore.se)
 
 ## Funktioner
 
 - Extrahera Odoo backup-ZIPs (dump.sql + filestore + manifest.json)
-- Migrera databaser från Odoo 16.0 → 17.0 (15 SQL-skript)
-- Migrera databaser från Odoo 17.0 → 18.0 (17 SQL-skript)
-- Auto-detektera migreringsväg baserat på databasversion
-- Electron GUI med drag-and-drop, progressvisning och logghantering
+- Migrera databaser fran Odoo 16.0 → 17.0 (15 SQL-skript)
+- Migrera databaser fran Odoo 17.0 → 18.0 (17 SQL-skript)
+- Auto-detektera migreringsvag baserat pa databasversion
+- Versionskontroll - blockerar migrering om backup-version inte matchar vald vag
+- Electron GUI med progressvisning genom alla 4 faser
+- Detaljerad migrationsrapport med fas-tider, databasstatistik och per-skript-resultat
+- Textrapport sparas automatiskt bredvid output-ZIP
+- PostgreSQL auto-sokning (hittar psql/pg_dump aven om de inte finns i PATH)
+
+## Systemkrav
+
+- Node.js 18+
+- PostgreSQL 14+ (korande)
+- Windows / macOS / Linux
 
 ## Quick Start
 
-### GUI (Electron)
+### GUI (Electron desktop-app)
 
 ```bash
-cd gui
+# Installera beroenden
 npm install
-npm run dev
+cd gui && npm install
+
+# Bygg backend + GUI
+cd ..
+npm run build
+cd gui && npm run build
+
+# Starta appen
+npx electron .
 ```
+
+Eller anvand startskriptet (Windows):
+```bash
+start-gui.bat
+```
+
+### Anvandning
+
+1. Valj migreringsvag (16→17 eller 17→18)
+2. Valj din Odoo backup-ZIP som input
+3. Valj var output-filen ska sparas
+4. Se till att PostgreSQL kor och ar konfigurerad (Settings)
+5. Klicka "Start Migration"
+6. Granska den detaljerade rapporten nar migreringen ar klar
 
 ### Backend (CLI)
 
 ```bash
 npm install
 npm run build
-```
 
-```typescript
-import { migrate } from './src';
-
-const result = await migrate({
-  inputPath: '/path/to/backup.zip',
-  outputPath: '/path/to/output',
-  postgresConfig: {
-    host: 'localhost',
-    port: 5432,
-    user: 'postgres',
-    password: 'password'
-  }
-});
+npx ts-node src/index.ts \
+  --input backup-odoo16.zip \
+  --output backup-odoo17.zip \
+  --pg-host localhost \
+  --pg-user postgres \
+  --pg-password secret
 ```
 
 ## Projektstruktur
@@ -47,61 +72,76 @@ const result = await migrate({
 ```
 Odoo-ZIPConverter/
 ├── src/                    # Backend migreringsmotor
-│   ├── index.ts           # Huvudexport
+│   ├── index.ts           # Huvudexport (migrate())
 │   ├── extractor.ts       # ZIP-extraktion
-│   ├── database.ts        # PostgreSQL-operationer
+│   ├── database.ts        # PostgreSQL temp-databas, psql/pg_dump
 │   ├── filestore.ts       # Filestore-hantering
+│   ├── types.ts           # TypeScript-typer
 │   └── migration/         # Migreringsskript
 │       ├── index.ts       # Orchestrator med auto-detection
-│       ├── odoo-16-to-17.ts  # 15 skript för 16→17
-│       └── odoo-17-to-18.ts  # 17 skript för 17→18
+│       ├── odoo-16-to-17.ts  # 15 skript for 16→17
+│       └── odoo-17-to-18.ts  # 17 skript for 17→18
 ├── gui/                    # Electron desktop-app
-│   ├── src/main/          # Main process
-│   └── src/renderer/      # React UI
-├── metamorphosis/          # Evolution governance
+│   ├── src/main/          # Main process + IPC handlers
+│   └── src/renderer/      # React UI + komponenter
+│       └── components/
+│           ├── FileSelector.tsx
+│           ├── MigrationProgress.tsx
+│           ├── MigrationReport.tsx
+│           └── Settings.tsx
+├── dist/                   # Kompilerad backend
 └── tests/                  # Tester
 ```
 
 ## Migreringsskript
 
-### Odoo 16 → 17
-- Grundläggande tabelluppdateringar
-- Modulstrukturändringar
-- Partner/kontaktfält
+### Odoo 16 → 17 (15 skript)
+- Integritetskontroll av backup
+- Modulberoende- och statusuppdateringar
+- Partner trust-falt och aktivitetssparning
+- TOTP och API-nyckelstod
+- Bokforing (account.move) och betalningsstatus
+- Mail, CRM och webbplatsstruktur
+- Versionsmarkering
 
-### Odoo 17 → 18
+### Odoo 17 → 18 (17 skript)
 - Modulkategoriuppdateringar
-- Förbättrad lösenordspolicy
-- Meddelandereaktioner
-- Schemalagda meddelanden
-- Förbättrad sessionshantering
+- Forbattrad losenordspolicy
+- Meddelandereaktioner och schemalagda meddelanden
+- Forbattrad sessionshantering
+- Kundfalt och betalningsflode
+- CRM lead-scoring och webbplats-SEO
 
-## Systemkrav
+## Migrationsrapport
 
-- Node.js 18+
-- PostgreSQL 14+
-- Windows/macOS/Linux
+Efter varje migrering genereras en detaljerad rapport som visar:
+- **Fas-tider**: Extraction, Database Setup, Migration, Export
+- **Databasstatistik**: Tabeller, moduler, partners, anvandare
+- **Skript-resultat**: Status ([OK]/[SKIP]/[FAIL]), namn och kortid for varje skript
+- **Varningar**: SQL-importvarningar och andra noteringar
 
-## Utveckling med Claude Code
+Rapporten visas i GUI:t och sparas aven som textfil (`*-report.txt`).
+
+## Utveckling
 
 ```bash
-claude
+# Typecheck
+npm run typecheck
+
+# Bygg backend
+npm run build
+
+# Bygg GUI
+cd gui
+npm run build
+
+# Starta i dev-lage (hot-reload)
+npm run dev
 ```
-
-Se `CLAUDE.md` för Claude Code-konfiguration.
-
-## METAMORPHOSIS
-
-Projektet utvecklades med METAMORPHOSIS evolutionary governance:
-
-| Evolution | Mål | Vinnare |
-|-----------|-----|---------|
-| evo-001 | Backend | Beta (Disk-based extraction) |
-| evo-002 | GUI | Beta (Electron) |
-| evo-003 | 17→18 stöd | Alpha (Modular Scripts) |
-
-Se `metamorphosis/CLAUDE.md` för dokumentation.
 
 ## Licens
 
 MIT
+
+---
+Utvecklat av [Arbore, Sweden](https://www.arbore.se)
