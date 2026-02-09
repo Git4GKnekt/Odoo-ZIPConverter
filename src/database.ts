@@ -18,6 +18,7 @@ import {
   DatabaseContext,
   Logger,
   MigrationScript,
+  PostMigrationStats,
   PostgresConfig
 } from './types';
 
@@ -213,16 +214,22 @@ async function verifyDumpImport(dbContext: DatabaseContext, logger: Logger): Pro
 /**
  * Execute a single migration script
  */
+export interface ScriptExecutionResult {
+  applied: boolean;
+  durationMs: number;
+}
+
 export async function executeMigrationScript(
   pool: Pool,
   script: MigrationScript,
   logger: Logger
-): Promise<boolean> {
+): Promise<ScriptExecutionResult> {
   logger.info('Executing migration script', {
     id: script.id,
     name: script.name
   });
 
+  const startTime = Date.now();
   const client = await pool.connect();
 
   try {
@@ -235,7 +242,7 @@ export async function executeMigrationScript(
       if (!shouldRun) {
         logger.info('Pre-check returned false, skipping script', { id: script.id });
         await client.query('ROLLBACK');
-        return false;
+        return { applied: false, durationMs: Date.now() - startTime };
       }
     }
 
@@ -252,8 +259,9 @@ export async function executeMigrationScript(
     }
 
     await client.query('COMMIT');
-    logger.debug('Migration script completed', { id: script.id });
-    return true;
+    const durationMs = Date.now() - startTime;
+    logger.debug('Migration script completed', { id: script.id, durationMs });
+    return { applied: true, durationMs };
 
   } catch (err) {
     await client.query('ROLLBACK');
@@ -265,6 +273,42 @@ export async function executeMigrationScript(
   } finally {
     client.release();
   }
+}
+
+/**
+ * Collect post-migration database statistics
+ */
+export async function collectPostMigrationStats(
+  pool: Pool,
+  logger: Logger
+): Promise<PostMigrationStats> {
+  const stats: PostMigrationStats = {
+    tableCount: 0,
+    moduleCount: 0,
+    installedModuleCount: 0,
+    partnerCount: 0,
+    userCount: 0
+  };
+
+  const queries: Array<{ key: keyof PostMigrationStats; sql: string }> = [
+    { key: 'tableCount', sql: `SELECT COUNT(*)::int as count FROM information_schema.tables WHERE table_schema = 'public'` },
+    { key: 'moduleCount', sql: `SELECT COUNT(*)::int as count FROM ir_module_module` },
+    { key: 'installedModuleCount', sql: `SELECT COUNT(*)::int as count FROM ir_module_module WHERE state = 'installed'` },
+    { key: 'partnerCount', sql: `SELECT COUNT(*)::int as count FROM res_partner` },
+    { key: 'userCount', sql: `SELECT COUNT(*)::int as count FROM res_users` },
+  ];
+
+  for (const q of queries) {
+    try {
+      const result = await pool.query(q.sql);
+      stats[q.key] = result.rows[0]?.count ?? 0;
+    } catch (err) {
+      logger.warn(`Failed to collect stat: ${q.key}`, { error: (err as Error).message });
+    }
+  }
+
+  logger.info('Post-migration stats', stats as unknown as Record<string, unknown>);
+  return stats;
 }
 
 /**

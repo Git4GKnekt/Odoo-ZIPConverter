@@ -13,7 +13,8 @@ import { Pool } from 'pg';
 import {
   Logger,
   MigrationResult,
-  MigrationScript
+  MigrationScript,
+  ScriptResult
 } from '../types';
 import {
   getMigrationScripts as getMigrationScripts16to17,
@@ -153,15 +154,39 @@ export async function runMigration(
     const scripts = config.getScripts();
     logger.info(`Found ${scripts.length} migration scripts`);
 
+    const scriptResults: ScriptResult[] = [];
+
     for (const script of scripts) {
       try {
-        const applied = await executeMigrationScript(pool, script, logger);
-        if (applied) {
+        const execResult = await executeMigrationScript(pool, script, logger);
+        if (execResult.applied) {
           result.migrationsApplied.push(script.id);
+          scriptResults.push({
+            id: script.id,
+            name: script.name,
+            description: script.description,
+            status: 'applied',
+            durationMs: execResult.durationMs
+          });
         } else {
           result.warnings.push(`Skipped: ${script.id} (pre-check false)`);
+          scriptResults.push({
+            id: script.id,
+            name: script.name,
+            description: script.description,
+            status: 'skipped',
+            durationMs: execResult.durationMs
+          });
         }
       } catch (err) {
+        scriptResults.push({
+          id: script.id,
+          name: script.name,
+          description: script.description,
+          status: 'failed',
+          durationMs: 0,
+          error: (err as Error).message
+        });
         result.errors.push({
           phase: 'migration',
           message: `Script ${script.id} failed: ${(err as Error).message}`,
@@ -170,9 +195,12 @@ export async function runMigration(
         });
         logger.error('Migration script failed, aborting', { scriptId: script.id });
         result.duration = Date.now() - startTime;
+        result.report = { phaseTimings: { extraction: 0, database: 0, migration: 0, export: 0 }, scriptResults, stats: { tableCount: 0, moduleCount: 0, installedModuleCount: 0, partnerCount: 0, userCount: 0 }, importWarnings: [] };
         return result;
       }
     }
+
+    result.report = { phaseTimings: { extraction: 0, database: 0, migration: 0, export: 0 }, scriptResults, stats: { tableCount: 0, moduleCount: 0, installedModuleCount: 0, partnerCount: 0, userCount: 0 }, importWarnings: [] };
 
     // Phase 3: Post-migration validation
     logger.info('Phase 3: Post-migration validation');

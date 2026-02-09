@@ -16,7 +16,8 @@ import {
   MigrationResult,
   Logger,
   DatabaseContext,
-  ExtractionContext
+  ExtractionContext,
+  VersionPair
 } from './types';
 import {
   createTempDirectory,
@@ -33,8 +34,10 @@ import {
   dropTempDatabase,
   createPool,
   verifyConnection,
-  getDatabaseSize
+  getDatabaseSize,
+  collectPostMigrationStats
 } from './database';
+import * as fs from 'fs';
 import { runMigration, getMigrationPathInfo, MigrationPath } from './migration';
 
 /**
@@ -81,6 +84,7 @@ export async function migrate(config: MigrationConfig): Promise<MigrationResult>
 
   try {
     // ===== PHASE 1: Extraction =====
+    const phase1Start = Date.now();
     logger.info('--- Phase 1: Extraction ---');
     tempDir = createTempDirectory(config.tempDir);
     logger.info('Created temp directory', { path: tempDir });
@@ -115,7 +119,10 @@ export async function migrate(config: MigrationConfig): Promise<MigrationResult>
       );
     }
 
+    const phase1Duration = Date.now() - phase1Start;
+
     // ===== PHASE 2: Database Setup =====
+    const phase2Start = Date.now();
     logger.info('--- Phase 2: Database Setup ---');
     dbContext = await createTempDatabase(config.postgresConfig, logger);
 
@@ -130,7 +137,10 @@ export async function migrate(config: MigrationConfig): Promise<MigrationResult>
     const dbSizeBefore = await getDatabaseSize(pool, dbContext.dbName, logger);
     logger.info('Database loaded', { size: dbSizeBefore });
 
+    const phase2Duration = Date.now() - phase2Start;
+
     // ===== PHASE 3: Migration =====
+    const phase3Start = Date.now();
     logger.info('--- Phase 3: Migration ---');
     const migrationResult = await runMigration(pool, logger, migrationPath);
 
@@ -142,6 +152,8 @@ export async function migrate(config: MigrationConfig): Promise<MigrationResult>
       return migrationResult;
     }
 
+    const phase3Duration = Date.now() - phase3Start;
+
     const dbSizeAfter = await getDatabaseSize(pool, dbContext.dbName, logger);
     logger.info('Migration complete', {
       scriptsApplied: migrationResult.migrationsApplied.length,
@@ -150,7 +162,11 @@ export async function migrate(config: MigrationConfig): Promise<MigrationResult>
       dbSizeAfter
     });
 
+    // Collect post-migration stats
+    const postStats = await collectPostMigrationStats(pool, logger);
+
     // ===== PHASE 4: Export =====
+    const phase4Start = Date.now();
     logger.info('--- Phase 4: Export ---');
 
     // Close pool before pg_dump
@@ -174,16 +190,50 @@ export async function migrate(config: MigrationConfig): Promise<MigrationResult>
     // Pack new ZIP
     await packBackup(extractionContext.contents, config.outputPath, logger);
 
+    const phase4Duration = Date.now() - phase4Start;
+
     // Calculate stats
     const inputSize = getFileSize(config.inputPath);
     const outputSize = getFileSize(config.outputPath);
+    migrationResult.duration = Date.now() - startTime;
+
     logger.info('Migration complete', {
       inputSize,
       outputSize,
-      duration: `${((Date.now() - startTime) / 1000).toFixed(2)}s`
+      duration: `${(migrationResult.duration / 1000).toFixed(2)}s`
     });
 
-    migrationResult.duration = Date.now() - startTime;
+    // Build full report
+    const phaseTimings = {
+      extraction: phase1Duration,
+      database: phase2Duration,
+      migration: phase3Duration,
+      export: phase4Duration
+    };
+
+    if (migrationResult.report) {
+      migrationResult.report.phaseTimings = phaseTimings;
+      migrationResult.report.stats = postStats;
+    } else {
+      migrationResult.report = {
+        phaseTimings,
+        scriptResults: [],
+        stats: postStats,
+        importWarnings: []
+      };
+    }
+
+    // Save text report
+    try {
+      const reportPath = config.outputPath.replace(/\.zip$/i, '-report.txt');
+      const reportText = generateTextReport(migrationResult, pathInfo);
+      fs.writeFileSync(reportPath, reportText, 'utf8');
+      migrationResult.report.reportFilePath = reportPath;
+      logger.info('Report saved', { path: reportPath });
+    } catch (reportErr) {
+      logger.warn('Failed to save report file', { error: (reportErr as Error).message });
+    }
+
     return migrationResult;
 
   } catch (err) {
@@ -238,6 +288,79 @@ export async function migrate(config: MigrationConfig): Promise<MigrationResult>
 
     logger.info('Cleanup complete');
   }
+}
+
+/**
+ * Generate a human-readable text report
+ */
+function generateTextReport(result: MigrationResult, pathInfo: VersionPair): string {
+  const lines: string[] = [];
+  const fmt = (ms: number) => `${(ms / 1000).toFixed(1)}s`;
+
+  lines.push('=== Odoo Migration Report ===');
+  lines.push(`Date: ${new Date().toISOString().slice(0, 16).replace('T', ' ')}`);
+  lines.push(`Source: ${pathInfo.source} → Target: ${pathInfo.target}`);
+  lines.push(`Status: ${result.success ? 'Success' : 'Failed'}`);
+  lines.push(`Duration: ${fmt(result.duration)}`);
+  lines.push('');
+
+  if (result.report) {
+    const pt = result.report.phaseTimings;
+    lines.push('--- Phase Timing ---');
+    lines.push(`Extraction:     ${fmt(pt.extraction)}`);
+    lines.push(`Database Setup: ${fmt(pt.database)}`);
+    lines.push(`Migration:      ${fmt(pt.migration)}`);
+    lines.push(`Export:         ${fmt(pt.export)}`);
+    lines.push('');
+
+    const s = result.report.stats;
+    lines.push('--- Database Statistics ---');
+    lines.push(`Tables: ${s.tableCount}`);
+    lines.push(`Modules: ${s.moduleCount} (${s.installedModuleCount} installed)`);
+    lines.push(`Partners: ${s.partnerCount.toLocaleString()}`);
+    lines.push(`Users: ${s.userCount}`);
+    lines.push('');
+
+    const sr = result.report.scriptResults;
+    const total = sr.length;
+    const applied = sr.filter(s => s.status === 'applied').length;
+    lines.push(`--- Migration Scripts (${applied}/${total}) ---`);
+    for (const script of sr) {
+      const tag = script.status === 'applied' ? '[OK]  ' : script.status === 'skipped' ? '[SKIP]' : '[FAIL]';
+      const name = script.name.padEnd(40);
+      lines.push(`${tag} ${script.id.padEnd(35)} ${name} ${fmt(script.durationMs)}`);
+      if (script.error) {
+        lines.push(`       Error: ${script.error}`);
+      }
+    }
+    lines.push('');
+
+    if (result.report.importWarnings.length > 0) {
+      lines.push(`--- Import Warnings (${result.report.importWarnings.length}) ---`);
+      for (const w of result.report.importWarnings) {
+        lines.push(`- ${w}`);
+      }
+      lines.push('');
+    }
+  }
+
+  if (result.warnings.length > 0) {
+    lines.push(`--- Warnings (${result.warnings.length}) ---`);
+    for (const w of result.warnings) {
+      lines.push(`- ${w}`);
+    }
+    lines.push('');
+  }
+
+  if (result.errors.length > 0) {
+    lines.push(`--- Errors (${result.errors.length}) ---`);
+    for (const e of result.errors) {
+      lines.push(`- [${e.phase}] ${e.message}`);
+    }
+    lines.push('');
+  }
+
+  return lines.join('\n');
 }
 
 /**
