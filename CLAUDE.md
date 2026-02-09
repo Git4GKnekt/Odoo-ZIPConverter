@@ -18,12 +18,13 @@ Innan storre andringar, las dessa kallor:
 
 ## VAD (Tech Stack och Struktur)
 
-Stack: TypeScript, React, Electron, PostgreSQL
+Stack: TypeScript, React, Electron, Embedded PostgreSQL
 
 ```
 Odoo-ZIPConverter/
 ├── src/                      # Backend migreringsmotor
 │   ├── index.ts             # Huvudexport (migrate())
+│   ├── embedded-pg.ts       # Inbaddad PostgreSQL-livscykel
 │   ├── extractor.ts         # ZIP-extraktion
 │   ├── database.ts          # PostgreSQL temp-databas
 │   ├── filestore.ts         # Filestore-kopiering
@@ -33,7 +34,10 @@ Odoo-ZIPConverter/
 │       └── odoo-17-to-18.ts # 17 migreringsskript
 ├── gui/                      # Electron desktop-app
 │   ├── src/main/            # IPC handlers
-│   └── src/renderer/        # React UI
+│   ├── src/renderer/        # React UI
+│   ├── scripts/             # Byggskript (prepare-backend, prepare-postgres)
+│   └── postgres/            # Bundlade PG-binarar (gitignored, byggs lokalt)
+├── Screenprints/             # Skarmbilder for dokumentation
 ├── metamorphosis/            # Evolution governance
 └── tests/                    # Tester
 ```
@@ -45,6 +49,7 @@ Migrera Odoo backup-ZIPs mellan versioner:
 - Kor SQL-migreringsskript i temporar PostgreSQL-databas
 - Auto-detektera migreringsvag (16->17 eller 17->18)
 - Paketera migrerad backup
+- **Inbaddad PostgreSQL** — ingen extern installation kravs
 
 ## HUR (Kommandon och Verifiering)
 
@@ -59,8 +64,10 @@ npm run typecheck
 ```bash
 cd gui
 npm install
-npm run dev          # Starta dev
-npm run build        # Bygg for produktion
+npm run prepare-postgres  # Kopiera PG-binarar (forsta gangen)
+npm run dev               # Starta dev
+npm run build             # Bygg for produktion
+npm run build:package     # Bygg installer (.exe)
 ```
 
 ### Verifiering (KOR ALLTID fore commit)
@@ -104,4 +111,4 @@ Projektet utvecklades med METAMORPHOSIS evolutionary governance:
 Se `metamorphosis/CLAUDE.md` for fullstandig dokumentation.
 
 ---
-Version: 2.0.0 | Uppdaterad: 2026-01-23
+Version: 2.3.0 | Uppdaterad: 2026-02-09
