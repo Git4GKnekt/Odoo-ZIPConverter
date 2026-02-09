@@ -15,6 +15,12 @@ export interface PostgresConfig {
 /** Supported migration paths */
 export type MigrationPath = '16-to-17' | '17-to-18';
 
+export interface ProgressUpdate {
+  phase: 'extraction' | 'database' | 'migration' | 'export';
+  progress: number;
+  message: string;
+}
+
 export interface MigrationConfig {
   inputPath: string;
   outputPath: string;
@@ -27,6 +33,8 @@ export interface MigrationConfig {
   tempDir?: string;
   /** Enable verbose logging */
   verbose?: boolean;
+  /** Progress callback for UI updates */
+  onProgress?: (update: ProgressUpdate) => void;
 }
 
 export interface OdooManifest {

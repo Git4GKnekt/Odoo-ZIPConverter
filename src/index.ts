@@ -82,10 +82,13 @@ export async function migrate(config: MigrationConfig): Promise<MigrationResult>
   let pool: Pool | null = null;
   let extractionContext: ExtractionContext | null = null;
 
+  const emitProgress = config.onProgress || (() => {});
+
   try {
     // ===== PHASE 1: Extraction =====
     const phase1Start = Date.now();
     logger.info('--- Phase 1: Extraction ---');
+    emitProgress({ phase: 'extraction', progress: 5, message: 'Extracting backup archive...' });
     tempDir = createTempDirectory(config.tempDir);
     logger.info('Created temp directory', { path: tempDir });
 
@@ -120,10 +123,12 @@ export async function migrate(config: MigrationConfig): Promise<MigrationResult>
     }
 
     const phase1Duration = Date.now() - phase1Start;
+    emitProgress({ phase: 'extraction', progress: 20, message: 'Extraction complete' });
 
     // ===== PHASE 2: Database Setup =====
     const phase2Start = Date.now();
     logger.info('--- Phase 2: Database Setup ---');
+    emitProgress({ phase: 'database', progress: 25, message: 'Creating temporary database...' });
     dbContext = await createTempDatabase(config.postgresConfig, logger);
 
     pool = createPool(dbContext);
@@ -132,16 +137,19 @@ export async function migrate(config: MigrationConfig): Promise<MigrationResult>
       throw new Error('Failed to connect to temporary database');
     }
 
+    emitProgress({ phase: 'database', progress: 30, message: 'Loading SQL dump...' });
     await loadDumpFile(extractionContext.contents.dumpPath, dbContext, logger);
 
     const dbSizeBefore = await getDatabaseSize(pool, dbContext.dbName, logger);
     logger.info('Database loaded', { size: dbSizeBefore });
 
     const phase2Duration = Date.now() - phase2Start;
+    emitProgress({ phase: 'database', progress: 45, message: 'Database ready' });
 
     // ===== PHASE 3: Migration =====
     const phase3Start = Date.now();
     logger.info('--- Phase 3: Migration ---');
+    emitProgress({ phase: 'migration', progress: 50, message: 'Running migration scripts...' });
     const migrationResult = await runMigration(pool, logger, migrationPath);
 
     if (!migrationResult.success) {
@@ -164,10 +172,12 @@ export async function migrate(config: MigrationConfig): Promise<MigrationResult>
 
     // Collect post-migration stats
     const postStats = await collectPostMigrationStats(pool, logger);
+    emitProgress({ phase: 'migration', progress: 75, message: 'Migration scripts complete' });
 
     // ===== PHASE 4: Export =====
     const phase4Start = Date.now();
     logger.info('--- Phase 4: Export ---');
+    emitProgress({ phase: 'export', progress: 80, message: 'Exporting database...' });
 
     // Close pool before pg_dump
     await pool.end();
@@ -188,9 +198,11 @@ export async function migrate(config: MigrationConfig): Promise<MigrationResult>
     }, logger);
 
     // Pack new ZIP
+    emitProgress({ phase: 'export', progress: 90, message: 'Creating output ZIP...' });
     await packBackup(extractionContext.contents, config.outputPath, logger);
 
     const phase4Duration = Date.now() - phase4Start;
+    emitProgress({ phase: 'export', progress: 100, message: 'Migration complete!' });
 
     // Calculate stats
     const inputSize = getFileSize(config.inputPath);

@@ -350,32 +350,24 @@ async function runMigrationWithProgress(
 ): Promise<MigrationResult> {
   const { source, target } = getVersionInfo(config.migrationPath);
 
-  // Send initial progress for extraction phase
-  sendProgress({
-    phase: 'extraction',
-    status: 'running',
-    progress: 5,
-    message: 'Starting migration...'
-  });
-
   try {
-    // Call the actual migration engine
+    // Call the actual migration engine with progress callback
     const backendConfig: BackendMigrationConfig = {
       inputPath: config.inputPath,
       outputPath: config.outputPath,
       postgresConfig: config.postgresConfig,
       migrationPath: config.migrationPath,
       keepTemp: config.keepTemp,
-      verbose: config.verbose
+      verbose: config.verbose,
+      onProgress: (update) => {
+        sendProgress({
+          phase: update.phase,
+          status: 'running',
+          progress: update.progress,
+          message: update.message
+        });
+      }
     };
-
-    // Update progress to show we're starting
-    sendProgress({
-      phase: 'extraction',
-      status: 'running',
-      progress: 10,
-      message: 'Extracting backup archive...'
-    });
 
     // Run the actual migration
     const result = await migrate(backendConfig);

@@ -682,7 +682,8 @@ const App: React.FC = () => {
         .app {
           display: flex;
           flex-direction: column;
-          min-height: 100vh;
+          height: 100vh;
+          overflow: hidden;
           font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
           background: #f5f5f5;
           color: #333;
